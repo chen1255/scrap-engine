@@ -145,8 +145,10 @@ func _do(wreck_id: String, count: int) -> void:
 		return
 	var res: Dictionary = CraftSystem.disassemble(wreck_id, count)
 	if not res.get("ok", false):
+		Sfx.play_error()
 		toast_requested.emit(str(res.get("reason", "拆解失败")))
 		return
+	Sfx.play("disassemble")
 	var names := PackedStringArray()
 	for id in res["order"]:
 		names.append("%s ×%d" % [GameData.item_name(str(id)), int(res["outputs"][id])])

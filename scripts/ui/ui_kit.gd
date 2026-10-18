@@ -88,6 +88,9 @@ static func muted(text: String, size := 12) -> Label:
 static func btn(text: String, primary := false, min_w := 0) -> Button:
 	var b := Button.new()
 	b.text = text
+	# 统一按钮反馈音：所有经由 UIKit.btn 构造的按钮都自带点击音效
+	if Sfx != null:
+		b.pressed.connect(func(): Sfx.play_click())
 	if primary:
 		b.add_theme_stylebox_override("normal", sb(ACCENT2, 8, Color("#9C8CFF")))
 		b.add_theme_stylebox_override("hover", sb(Color("#8E7DFF"), 8, Color("#BFB2FF")))
@@ -267,4 +270,94 @@ static func ratio_bar(segments: Array, width := 300, height := 14) -> Control:
 		seg.tooltip_text = "%s %.1f%%" % [str(s.get("label", "")), v / total * 100.0]
 		bar.add_child(seg)
 	return bar
+
+# ---------------- 动效原语 ----------------
+## 全部基于 Tween，无外部动画资源。控件放在容器里时布局由容器决定，
+## 因此这里只用「不影响布局」的属性做动效：modulate / self_modulate / scale / rotation；
+## 只有飘字这种悬浮层才直接动 position。
+
+## 卡片翻牌揭示：先压成细条，再带回弹展开 + 淡入 + 高光褪去。
+static func reveal_card(card: Control, delay := 0.0, narrow := 0.12) -> void:
+	if not card.is_inside_tree():
+		return
+	_recenter_on_resize(card)
+	card.pivot_offset = card.size * 0.5
+	card.modulate.a = 0.0
+	card.self_modulate = Color(1.95, 1.95, 1.95, 1.0)
+	card.scale = Vector2(narrow, 0.78)
+	var tw := card.create_tween()
+	tw.tween_interval(delay)
+	tw.tween_property(card, "scale", Vector2.ONE, 0.20).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(card, "modulate:a", 1.0, 0.12)
+	tw.parallel().tween_property(card, "self_modulate", Color(1, 1, 1, 1), 0.30)
+
+## 弹跳：放大一下再回到原尺寸。
+static func pop(node: Control, strength := 1.22, dur := 0.20) -> void:
+	if not node.is_inside_tree():
+		return
+	_recenter_on_resize(node)
+	node.pivot_offset = node.size * 0.5
+	_kill(node, "_pop_tw")
+	var tw := node.create_tween()
+	node.set_meta("_pop_tw", tw)
+	tw.tween_property(node, "scale", Vector2(strength, strength), dur * 0.35) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "scale", Vector2.ONE, dur * 0.65) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+## 摆动：左右小幅摇摆，用于结果「定型」时的冲击感（旋转不影响容器布局）。
+static func wobble(node: Control, deg := 3.5, dur := 0.45) -> void:
+	if not node.is_inside_tree():
+		return
+	_recenter_on_resize(node)
+	node.pivot_offset = node.size * 0.5
+	_kill(node, "_wobble_tw")
+	var tw := node.create_tween()
+	node.set_meta("_wobble_tw", tw)
+	tw.tween_property(node, "rotation", deg_to_rad(deg), dur * 0.15)
+	tw.tween_property(node, "rotation", deg_to_rad(-deg), dur * 0.28)
+	tw.tween_property(node, "rotation", deg_to_rad(deg * 0.5), dur * 0.22)
+	tw.tween_property(node, "rotation", 0.0, dur * 0.35)
+
+## 淡入（自动打断上一次淡入），用于视图切换过渡。
+static func fade_in(node: Control, dur := 0.16) -> void:
+	if not node.is_inside_tree():
+		return
+	_kill(node, "_fade_tw")
+	node.modulate.a = 0.0
+	var tw := node.create_tween()
+	node.set_meta("_fade_tw", tw)
+	tw.tween_property(node, "modulate:a", 1.0, dur)
+
+## 飘字：从 global_pos 处向上飘并淡出，播完自动回收。host 需为 Control（悬浮层建议直接挂视图根）。
+static func float_text(host: Control, global_pos: Vector2, text: String, color := TEXT, size := 15) -> void:
+	if not host.is_inside_tree():
+		return
+	var l := label(text, size, color)
+	l.add_theme_constant_override("outline_size", 6)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.z_index = 100
+	host.add_child(l)
+	l.global_position = global_pos
+	var p0 := l.position
+	var tw := l.create_tween()
+	tw.tween_property(l, "position", p0 + Vector2(0, -44), 0.85).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.85).set_delay(0.30)
+	tw.tween_callback(func(): l.queue_free())
+
+## 缩放/旋转都以控件自身中心为轴；容器改尺寸时自动重算轴心。
+static func _recenter_on_resize(node: Control) -> void:
+	if node.has_meta("_pivot_hooked"):
+		return
+	node.set_meta("_pivot_hooked", true)
+	node.resized.connect(func(): node.pivot_offset = node.size * 0.5)
+
+## 打断同一个控件上遗留的动画，避免叠加冲突。
+static func _kill(node: Node, key: String) -> void:
+	if not node.has_meta(key):
+		return
+	var t: Variant = node.get_meta(key)
+	if t is Tween and (t as Tween).is_valid():
+		(t as Tween).kill()
 

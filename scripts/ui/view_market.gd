@@ -8,6 +8,8 @@ var main: Node
 var _crate_box: VBoxContainer
 var _result_box: VBoxContainer
 var _last: Dictionary = {}
+var _animate := false      # 下一次重建结果时是否播放揭示演出
+var _stagger := 0.16       # 逐件揭示的间隔（连开时用更快的节奏）
 
 func setup(m: Node) -> void:
 	main = m
@@ -120,9 +122,13 @@ func _tier_dist(crate_id: String) -> Array:
 func _open(cid: String) -> void:
 	var res: Dictionary = LootSystem.open_crate(cid)
 	if not res.get("ok", false):
+		Sfx.play_error()
 		toast_requested.emit(str(res.get("reason", "开箱失败")))
 		return
 	_last = res
+	_animate = true
+	_stagger = 0.16
+	Sfx.play("open")
 	_rebuild_result()
 	var names := PackedStringArray()
 	for id in res["order"]:
@@ -138,6 +144,7 @@ func _open_multi(cid: String, times: int) -> void:
 		var res: Dictionary = LootSystem.open_crate(cid)
 		if not res.get("ok", false):
 			if merged.is_empty():
+				Sfx.play_error()
 				toast_requested.emit(str(res.get("reason", "开箱失败")))
 				return
 			break
@@ -149,6 +156,9 @@ func _open_multi(cid: String, times: int) -> void:
 				merged[id] = 0
 			merged[id] = int(merged[id]) + int(res["results"][id])
 	_last = { "results": merged, "order": order, "cost": spent, "energy": 0, "rolls": rolls }
+	_animate = true
+	_stagger = 0.06
+	Sfx.play("open", 1.08)
 	_rebuild_result()
 	toast_requested.emit("连开 %d 箱完成，共消耗 ₡%d" % [times, spent])
 
@@ -163,11 +173,21 @@ func _rebuild_result() -> void:
 	grid.columns = 1
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
-	for id in _last["order"]:
-		var tile := UIKit.item_tile(str(id), int(_last["results"][id]), 280)
+	var animate := _animate
+	_animate = false
+	var order: Array = _last["order"]
+	for i in range(order.size()):
+		var id := str(order[i])
+		var tile := UIKit.item_tile(id, int(_last["results"][id]), 280)
 		tile.mouse_filter = Control.MOUSE_FILTER_STOP
-		tile.gui_input.connect(_on_tile_input.bind(str(id)))
+		tile.gui_input.connect(_on_tile_input.bind(id))
 		grid.add_child(tile)
+		if animate:
+			# 逐件翻牌：卡片展开 + 翻牌音 + 按阶位音效（延迟播放在揭示瞬间对齐）
+			var d := 0.04 + float(i) * _stagger
+			UIKit.reveal_card(tile, d)
+			Sfx.play("flip", randf_range(0.98, 1.06), d)
+			Sfx.play_reveal(int(GameData.get_item(id).get("tier", 1)), d + 0.05)
 	_result_box.add_child(grid)
 
 func _on_tile_input(event: InputEvent, item_id: String) -> void:

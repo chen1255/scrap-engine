@@ -128,6 +128,14 @@ func _build_hud() -> Control:
 	tick_btn.pressed.connect(func(): MarketSystem.advance_tick(); show_toast("时间推进：行情已刷新"))
 	h.add_child(tick_btn)
 
+	var mute_btn := UIKitR.btn("音效：开")
+	mute_btn.tooltip_text = "开关全部音效"
+	mute_btn.pressed.connect(func():
+		var now_muted := Sfx.toggle_mute()
+		mute_btn.text = "音效：关" if now_muted else "音效：开"
+		show_toast("音效已关闭" if now_muted else "音效已开启"))
+	h.add_child(mute_btn)
+
 	var save_btn := UIKitR.btn("存档")
 	save_btn.pressed.connect(func(): GameState.save_game(); show_toast("已存档"))
 	h.add_child(save_btn)
@@ -194,6 +202,8 @@ func _create_views() -> void:
 # ---------------- 导航 ----------------
 
 func switch_view(id: String) -> void:
+	if _current != "" and _current != id:
+		Sfx.play_click()
 	for k in _views:
 		(_views[k] as Control).visible = (k == id)
 	_current = id
@@ -203,8 +213,12 @@ func switch_view(id: String) -> void:
 		var sb := UIKitR.sb(UIKitR.PANEL_HI if k == id else Color(0, 0, 0, 0), 8,
 			UIKitR.LINE_HI if k == id else Color(0, 0, 0, 0))
 		b.add_theme_stylebox_override("normal", sb)
-	if _views.has(id) and (_views[id] as Control).has_method("refresh"):
-		_views[id].refresh()
+	if _views.has(id):
+		var v: Control = _views[id] as Control
+		if v.has_method("refresh"):
+			v.refresh()
+		# 视图切换过渡：新视图淡入，避免生硬跳变
+		UIKitR.fade_in(v, 0.18)
 
 func _refresh_views() -> void:
 	for k in _views:
@@ -472,3 +486,4 @@ func show_toast(msg: String) -> void:
 	_toast_label.text = msg
 	_toast_wrap.visible = true
 	_toast_timer.start()
+	UIKitR.fade_in(_toast_wrap, 0.14)

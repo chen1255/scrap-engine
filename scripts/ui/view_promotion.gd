@@ -11,6 +11,9 @@ var _from_tier := 1
 var _use_stab := false
 var _use_boost := false
 var _last: Dictionary = {}
+var _spin_layer: Control
+var _spin_title: Label
+var _spin_skip := false
 
 func setup(m: Node) -> void:
 	main = m
@@ -28,6 +31,7 @@ func _build() -> void:
 	add_child(m)
 	_holder = UIKit.vbox(10)
 	m.add_child(_holder)
+	_build_spin_layer()
 
 var _holder: VBoxContainer
 
@@ -213,9 +217,15 @@ func _action_panel() -> Control:
 func _do_promote() -> void:
 	var res: Dictionary = CraftSystem.promote(_family, _from_tier, [], { "use_stabilizer": _use_stab, "use_booster": _use_boost })
 	if not res.get("ok", false):
+		Sfx.play_error()
 		toast_requested.emit(str(res.get("reason", "晋升失败")))
 		return
 	_last = res
+	# 先播完抽签演出，再刷新界面——否则结果会在演出结束前就露出来
+	await _play_spin(str(res["outcome"]))
+	# 材料被大量消耗后可能已经做不了这一阶，自动落回可做的阶位
+	_ensure_tier()
+	refresh()
 	var oc: Dictionary = GameData.outcomes.get(str(res["outcome"]), {})
 	var tail := ""
 	match str(res["outcome"]):
@@ -228,9 +238,83 @@ func _do_promote() -> void:
 		"breakdown":
 			tail = "材料全部崩解"
 	toast_requested.emit("%s —— %s" % [str(oc.get("name", "")), tail])
-	# 材料被大量消耗后可能已经做不了这一阶，自动落回可做的阶位
-	_ensure_tier()
-	refresh()
+
+# ---------------- 抽签演出 ----------------
+
+## 抽签浮层：遮住整个视图，滚动结果名后定格。点击任意处可跳过。
+func _build_spin_layer() -> void:
+	_spin_layer = Control.new()
+	_spin_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_spin_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	_spin_layer.visible = false
+	add_child(_spin_layer)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.74)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
+			_spin_skip = true)
+	_spin_layer.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_spin_layer.add_child(center)
+
+	var v := UIKit.vbox(8)
+	center.add_child(v)
+
+	var cap := UIKit.label("熔炉抽签", 13, UIKit.MUTED)
+	cap.custom_minimum_size.x = 620
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(cap)
+
+	_spin_title = UIKit.label("", 56, UIKit.TEXT)
+	_spin_title.custom_minimum_size = Vector2(620, 96)
+	_spin_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(_spin_title)
+
+	var hint := UIKit.label("点击任意处跳过", 11, UIKit.MUTED)
+	hint.custom_minimum_size.x = 620
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+
+func _play_spin(outcome: String) -> void:
+	var keys := ["success", "hold", "damage", "breakdown"]
+	_spin_skip = false
+	_spin_layer.visible = true
+	_spin_layer.modulate.a = 1.0
+	_spin_title.rotation = 0.0
+	_spin_title.scale = Vector2.ONE
+	_spin_title.add_theme_color_override("font_color", UIKit.MUTED)
+	_spin_title.text = "…"
+
+	# 滚动阶段
+	var step := 0.07
+	var elapsed := 0.0
+	var i := 0
+	while elapsed < 0.8 and not _spin_skip:
+		var k: String = str(keys[i % keys.size()])
+		_spin_title.text = str(GameData.outcomes.get(k, {}).get("name", k))
+		UIKit.pop(_spin_title, 1.07, 0.12)
+		Sfx.play("promote_spin", randf_range(0.95, 1.3))
+		await get_tree().create_timer(step, true, false, true).timeout
+		elapsed += step
+		i += 1
+
+	# 定格
+	var oc: Dictionary = GameData.outcomes.get(outcome, {})
+	_spin_title.text = str(oc.get("name", outcome))
+	_spin_title.add_theme_color_override("font_color", Color(str(oc.get("color", "#FFFFFF"))))
+	UIKit.pop(_spin_title, 1.45, 0.34)
+	UIKit.wobble(_spin_title, 3.0, 0.4)
+	Sfx.play_outcome(outcome)
+	await get_tree().create_timer(0.55 if not _spin_skip else 0.22, true, false, true).timeout
+
+	var tw := _spin_layer.create_tween()
+	tw.tween_property(_spin_layer, "modulate:a", 0.0, 0.18)
+	tw.tween_callback(func(): _spin_layer.visible = false)
 
 func _result_panel() -> Control:
 	var p := UIKit.panel(UIKit.BG_SOFT, 10, UIKit.LINE)

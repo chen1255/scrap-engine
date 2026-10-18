@@ -35,6 +35,7 @@ Godot 4.7.2 · GDScript · 零外部依赖 · 可离线单机运行
 | 品相（保养度） | 0~100 分档：崭新 / 良好 / 一般 / 磨损 / 报废；影响出售价系数，开箱时随机生成，拆解继承、晋升失败退还时保留 |
 | 词条 | 每族系 8 条，由物品 id 确定性抽取 —— 同一件物品的词条永远一致，不同存档可复现 |
 | 检视属性 | 每件物品 4 个数值，维度名由族系决定，数值取自 `data/items.json` |
+| 音效与演出 | 16 段程序化合成的短音效（零外部素材）+ 开箱逐件翻牌揭示、熔炉抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
 
 ### 数据规模
 
@@ -65,14 +66,15 @@ scrap-engine/
 ├── scenes/
 │   └── main.tscn            # 唯一主场景
 ├── scripts/
-│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem
-│   └── ui/                  # 主界面、6 个视图、全息检视面板、UI 组件库
+│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Sfx
+│   └── ui/                  # 主界面、6 个视图、全息检视面板、UI 组件库（含动效原语）
 ├── shaders/                 # 全息卡片与全息图标着色器
 ├── assets/
 │   ├── icons/               # 43 张 512×512 透明物品图标（含「未知」占位）
+│   ├── audio/               # 16 段程序化合成的音效 WAV（由 tools/gen_sfx.gd 生成）
 │   └── branding/            # 应用图标（png + 多尺寸 ico）
 ├── tests/                   # headless 概率自测
-└── tools/                   # 开发期工具：图标烘焙、视图截图
+└── tools/                   # 开发期工具：图标烘焙、音效合成、视图截图
 ```
 
 ### 运行
@@ -84,6 +86,17 @@ scrap-engine/
   ```powershell
   Godot_v4.7.2-stable_win64.exe --path . res://scenes/main.tscn
   ```
+
+### 音效与演出
+
+音效全部由脚本离线合成，仓库内不含任何第三方音频素材，许可证干净且可复现。16 段音效（点击 / 开箱 / 翻牌 / T1~T5 揭示 / 抽签滚动 / 成功 / 稳定 / 损伤 / 崩解 / 拆解 / 交易 / 错误）在 `assets/audio/`，由固定随机种子生成，重跑不产生差异：
+
+```powershell
+# 重新生成音效（仅在需要调整音色时执行）
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.tscn
+```
+
+运行时由 `Sfx` 自动加载单例统一播放（10 路播放池、支持延迟触发与静音），HUD 右上角的「音效：开/关」按钮可随时切换。演出采用轻快利落风格：开箱逐件翻牌揭示（连开更快）、熔炉抽签滚动定格（点击任意处跳过），整套演出默认 1~2 秒内完成。
 
 ### 数值自测
 
@@ -144,6 +157,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Condition | 0–100 graded as pristine / good / fair / worn / scrap; scales sell price. Rolled on unboxing, inherited on disassembly, preserved when a promotion fails |
 | Traits | 8 per family, deterministically derived from the item id — the same item always rolls the same traits, so saves are reproducible |
 | Inspection stats | 4 numeric values per item; dimension names come from the family, values from `data/items.json` |
+| Audio & presentation | 16 procedurally synthesized sound effects (no external assets) plus card-by-card reveal, furnace draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
 
 | Content | Count |
 |---|---|
@@ -162,6 +176,17 @@ Requires **Godot 4.7.2-stable**.
 
 - Editor: open the project and press `F5`
 - CLI: `Godot_v4.7.2-stable_win64.exe --path . res://scenes/main.tscn`
+
+### Audio & presentation
+
+All sound effects are synthesized offline by a script — the repo ships no third-party audio, so licensing is clean and results are reproducible. The 16 effects (click / open / flip / T1–T5 reveal / draw spin / success / hold / damage / breakdown / disassemble / trade / error) live in `assets/audio/` and are generated from a fixed random seed, so re-running produces identical files:
+
+```powershell
+# Regenerate audio (only needed when tweaking the timbre)
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.tscn
+```
+
+At runtime a `Sfx` autoload singleton handles playback (10-voice pool, delayed triggers, mute); the "Audio: on/off" button in the top-right HUD toggles mute at any time. Presentation is brisk and snappy: card-by-card crate reveals (faster when opening in bulk) and a spin-and-settle furnace draw that can be skipped by clicking anywhere, with each sequence finishing within 1–2 seconds.
 
 ### Drop-rate self-test
 

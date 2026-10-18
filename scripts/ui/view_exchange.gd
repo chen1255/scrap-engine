@@ -249,8 +249,11 @@ func _trend_label(trend: float) -> Label:
 func _buy(id: String, n: int) -> void:
 	var res: Dictionary = MarketSystem.buy(id, n)
 	if not res.get("ok", false):
+		Sfx.play_error()
 		toast_requested.emit(str(res.get("reason", "买入失败")))
 		return
+	Sfx.play("trade", 1.15)
+	UIKit.float_text(self, _summary.global_position + Vector2(0, 26), "-₡%d" % int(res.get("total", 0)), UIKit.BAD)
 	toast_requested.emit("买入 %s ×%d，花费 ₡%d" % [GameData.item_name(id), n, int(res.get("total", 0))])
 	refresh()
 
@@ -259,7 +262,10 @@ func _sell(id: String, n: int) -> void:
 		return
 	var res: Dictionary = MarketSystem.sell(id, n)
 	if not res.get("ok", false):
+		Sfx.play_error()
 		toast_requested.emit(str(res.get("reason", "卖出失败")))
 		return
+	Sfx.play("trade", 0.95)
+	UIKit.float_text(self, _summary.global_position + Vector2(0, 26), "+₡%d" % int(res.get("total", 0)), UIKit.OK)
 	toast_requested.emit("卖出 %s ×%d，获得 ₡%d（抛压已压低该类价格）" % [GameData.item_name(id), n, int(res.get("total", 0))])
 	refresh()
