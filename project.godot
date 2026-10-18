@@ -1,0 +1,41 @@
+; Engine configuration file.
+; 《废料引擎》Scrap Engine —— 赛博废料回收 / 拆解提纯 / 概率晋升
+
+config_version=5
+
+[application]
+
+config/name="废料引擎 Scrap Engine"
+config/description="赛博废料回收 · 全息拆解 · 概率晋升"
+config/version="0.1.0"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://assets/branding/app_icon.png"
+boot_splash/bg_color=Color(0.043, 0.055, 0.078, 1)
+boot_splash/image="res://assets/branding/app_icon.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=true
+
+[autoload]
+
+GameData="*res://scripts/autoload/game_data.gd"
+GameState="*res://scripts/autoload/game_state.gd"
+LootSystem="*res://scripts/autoload/loot_system.gd"
+CraftSystem="*res://scripts/autoload/craft_system.gd"
+MarketSystem="*res://scripts/autoload/market_system.gd"
+
+[display]
+
+window/size/viewport_width=1360
+window/size/viewport_height=820
+window/size/window_width_override=1360
+window/size/window_height_override=820
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_3d=2
+environment/defaults/default_clear_color=Color(0.043, 0.055, 0.078, 1)

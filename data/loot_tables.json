@@ -1,0 +1,65 @@
+{
+  "_comment": "黑市盲盒掉落表。entry 支持两种写法：{id:\"具体物品id\"} 或 {filter:{kind/tier/family}} 由 LootSystem 在运行时解析为物品池。weight 为相对权重，min/max 为单次产出的数量区间。",
+  "crates": [
+    {
+      "id": "crate_scrap",
+      "name": "未鉴定赛博废料",
+      "desc": "黑市最常见的盲盒，多半是电子垃圾，偶尔能翻出好东西。",
+      "cost": 30,
+      "energy": 1,
+      "rolls": { "min": 2, "max": 4 },
+      "table": [
+        { "filter": { "kind": "wreck", "tier": 1 },    "weight": 40,  "min": 1, "max": 2 },
+        { "filter": { "kind": "material", "tier": 1 }, "weight": 30,  "min": 1, "max": 3 },
+        { "filter": { "kind": "wreck", "tier": 2 },    "weight": 7,   "min": 1, "max": 1 },
+        { "filter": { "kind": "material", "tier": 2 }, "weight": 6,   "min": 1, "max": 2 },
+        { "filter": { "kind": "core" },                "weight": 0.3, "min": 1, "max": 1 }
+      ]
+    },
+    {
+      "id": "crate_datadisk",
+      "name": "加密数据盘",
+      "desc": "来源不明的数据盘，格式掉了外壳却留着内核。稳定出产标准级以上的料。",
+      "cost": 120,
+      "energy": 1,
+      "rolls": { "min": 2, "max": 3 },
+      "table": [
+        { "filter": { "kind": "material", "tier": 1 }, "weight": 18, "min": 2, "max": 4 },
+        { "filter": { "kind": "wreck", "tier": 2 },    "weight": 24, "min": 1, "max": 2 },
+        { "filter": { "kind": "material", "tier": 2 }, "weight": 30, "min": 1, "max": 2 },
+        { "filter": { "kind": "wreck", "tier": 3 },    "weight": 9,  "min": 1, "max": 1 },
+        { "filter": { "kind": "material", "tier": 3 }, "weight": 7,  "min": 1, "max": 1 },
+        { "filter": { "kind": "core" },                "weight": 0.8,"min": 1, "max": 1 }
+      ]
+    },
+    {
+      "id": "crate_milspec",
+      "name": "军用级密封箱",
+      "desc": "贴着军械编号的密封箱，封条完好。开它需要一点勇气和很多信用点。",
+      "cost": 450,
+      "energy": 2,
+      "rolls": { "min": 2, "max": 3 },
+      "table": [
+        { "filter": { "kind": "material", "tier": 2 }, "weight": 16, "min": 1, "max": 3 },
+        { "filter": { "kind": "wreck", "tier": 3 },    "weight": 26, "min": 1, "max": 2 },
+        { "filter": { "kind": "material", "tier": 3 }, "weight": 32, "min": 1, "max": 2 },
+        { "filter": { "kind": "material", "tier": 4 }, "weight": 10, "min": 1, "max": 1 },
+        { "filter": { "kind": "core" },                "weight": 2,  "min": 1, "max": 1 }
+      ]
+    },
+    {
+      "id": "crate_abyss",
+      "name": "深渊打捞舱",
+      "desc": "从轨道坟场最深处拖回来的东西。没人保证里面是货还是尸。",
+      "cost": 1200,
+      "energy": 3,
+      "rolls": { "min": 2, "max": 3 },
+      "table": [
+        { "filter": { "kind": "material", "tier": 3 }, "weight": 22, "min": 1, "max": 3 },
+        { "filter": { "kind": "material", "tier": 4 }, "weight": 36, "min": 1, "max": 2 },
+        { "filter": { "kind": "material", "tier": 5 }, "weight": 7,  "min": 1, "max": 1 },
+        { "filter": { "kind": "core" },                "weight": 6,  "min": 1, "max": 1 }
+      ]
+    }
+  ]
+}

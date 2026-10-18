@@ -1,0 +1,28 @@
+{
+  "_comment": "稀有度分层。tier 1 最低，tier 5 最高。promotion 只能在相邻层级间进行。",
+  "tiers": [
+    { "tier": 1, "name": "废料级", "en": "SCRAP",     "color": "#8A8F98", "glow": "#5A6270" },
+    { "tier": 2, "name": "标准级", "en": "STANDARD",  "color": "#4FC3F7", "glow": "#1E6E8C" },
+    { "tier": 3, "name": "精炼级", "en": "REFINED",   "color": "#7C6BFF", "glow": "#3A2E9E" },
+    { "tier": 4, "name": "军工级", "en": "MIL-SPEC",  "color": "#C77DFF", "glow": "#7A3FA8" },
+    { "tier": 5, "name": "原型级", "en": "PROTOTYPE", "color": "#FFB74D", "glow": "#A86A16" }
+  ],
+  "families": [
+    { "id": "mech", "name": "机械", "color": "#7FB2C9", "desc": "结构件、传动、执行器。工业回收的骨干。",
+      "dims": [ "结构强度", "导电性", "耐温性", "精密度" ] },
+    { "id": "bio",  "name": "生物", "color": "#8FD98F", "desc": "培养组织、腺体、神经接口。管制最严的一类。",
+      "dims": [ "活性", "稳定度", "再生力", "亲和性" ] },
+    { "id": "data", "name": "数据", "color": "#B39DDB", "desc": "日志、密钥、模型权重。看不见但最值钱。",
+      "dims": [ "完整度", "加密强度", "信息密度", "可读性" ] }
+  ],
+  "_conds_comment": "保养度（品相）分档。数值 0~100，取第一个满足 min 的档位。",
+  "conditions": [
+    { "min": 90, "name": "崭新", "color": "#4FE38A" },
+    { "min": 75, "name": "良好", "color": "#4FC3F7" },
+    { "min": 55, "name": "一般", "color": "#E6EDF7" },
+    { "min": 35, "name": "磨损", "color": "#FFB74D" },
+    { "min": 0,  "name": "报废", "color": "#FF5370" }
+  ],
+  "_roll_comment": "开箱时每件物品的保养度取值范围；市场买入的物品按 default 赋值。",
+  "condition_roll": { "min": 35, "max": 100, "default": 80 }
+}

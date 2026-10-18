@@ -1,0 +1,43 @@
+{
+  "_comment": "晋升（概率博弈）配方。消耗同族同阶材料 N 个 + 信用点，抽一次签决定结果。pity=保底：连续失败达到 threshold 次后，每次失败给 success 增加 per_fail 点权重。",
+  "consume": 5,
+  "steps": [
+    {
+      "from": 1, "to": 2, "cost": 45, "damage_loss": 2,
+      "draw": [ ["success", 70], ["hold", 20], ["damage", 8], ["breakdown", 2] ],
+      "pity": { "threshold": 6, "per_fail": 5 }
+    },
+    {
+      "from": 2, "to": 3, "cost": 180, "damage_loss": 2,
+      "draw": [ ["success", 55], ["hold", 25], ["damage", 15], ["breakdown", 5] ],
+      "pity": { "threshold": 6, "per_fail": 4 }
+    },
+    {
+      "from": 3, "to": 4, "cost": 700, "damage_loss": 2,
+      "draw": [ ["success", 40], ["hold", 25], ["damage", 25], ["breakdown", 10] ],
+      "pity": { "threshold": 7, "per_fail": 3 }
+    },
+    {
+      "from": 4, "to": 5, "cost": 2600, "damage_loss": 2,
+      "draw": [ ["success", 25], ["hold", 25], ["damage", 35], ["breakdown", 15] ],
+      "pity": { "threshold": 8, "per_fail": 2.5 }
+    }
+  ],
+  "outcomes": {
+    "success":   { "name": "成功",   "color": "#4FE38A", "desc": "晋升成功，产出 1 个高一阶部件。" },
+    "hold":      { "name": "稳定",   "color": "#4FC3F7", "desc": "熔炉保持稳定，材料全部保留，可立即重试。" },
+    "damage":    { "name": "损伤",   "color": "#FFB74D", "desc": "结构受损，损失部分材料。" },
+    "breakdown": { "name": "崩解",   "color": "#FF5370", "desc": "材料全部崩解，仅回收少量低阶残渣。" }
+  },
+  "consumables": {
+    "stabilizer": { "id": "stabilizer", "name": "稳定剂",       "price": 150, "effect": "negate_breakdown", "desc": "本次晋升把「崩解」签替换为「损伤」。" },
+    "booster":    { "id": "booster",    "name": "过载催化剂",   "price": 260, "effect": "add_success", "amount": 12, "desc": "本次晋升成功率 +12%（从损伤与崩解中扣除）。" }
+  },
+  "calibrator": {
+    "_comment": "概率校准器：永久元升级，每级把崩解权重 -2 转给成功。",
+    "max_level": 5,
+    "price_base": 800,
+    "price_growth": 1.9,
+    "breakdown_reduction_per_level": 2
+  }
+}

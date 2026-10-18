@@ -1,0 +1,17 @@
+{
+  "_comment": "单机模拟交易所。价格随 tick 波动，玩家大量抛售会压低该类物品价格，之后逐步回弹。",
+  "volatility": 0.14,
+  "refresh_ticks": 10,
+  "sell_fee": 0.05,
+  "buy_markup": 0.2,
+  "dump_impact": 0.015,
+  "dump_recover": 0.3,
+  "events": [
+    { "id": "dock_strike",  "name": "轨道船坞罢工", "desc": "机械件供应中断，机械类价格上浮。",     "weight": 10, "ticks": 8,  "filter": { "family": "mech" }, "factor": 1.45 },
+    { "id": "bio_ban",      "name": "生物管制升级", "desc": "生物类材料被列入管制清单，价格上浮。",   "weight": 8,  "ticks": 8,  "filter": { "family": "bio" },  "factor": 1.55 },
+    { "id": "data_leak",    "name": "数据大泄漏",   "desc": "大量数据件涌入市场，数据类价格下挫。",   "weight": 8,  "ticks": 8,  "filter": { "family": "data" }, "factor": 0.62 },
+    { "id": "mil_surplus",  "name": "军备过剩抛售", "desc": "军方清库存，军工级物品价格暴跌。",       "weight": 6,  "ticks": 10, "filter": { "tier": 4 },        "factor": 0.55 },
+    { "id": "prototype_hype","name": "原型级炒作",  "desc": "收藏家集体炒作，原型级物品价格飙升。",   "weight": 4,  "ticks": 12, "filter": { "tier": 5 },        "factor": 1.9  },
+    { "id": "quiet",        "name": "市场平静",     "desc": "没有特别的消息，价格按常规波动。",       "weight": 24, "ticks": 8,  "filter": {},                  "factor": 1.0  }
+  ]
+}

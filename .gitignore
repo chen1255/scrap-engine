@@ -1,0 +1,15 @@
+# Godot 4 生成物
+.godot/
+.import/
+export.cfg
+*.translation
+
+# 说明：export_presets.cfg 是导出预设（Windows/Steam 打包参数），属于需要入库的项目配置，故不忽略。
+
+# 导出产物
+build/
+export/
+
+# 系统文件
+.DS_Store
+Thumbs.db
