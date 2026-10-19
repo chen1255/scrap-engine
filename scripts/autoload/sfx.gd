@@ -14,7 +14,7 @@ const NAMES := [
 	"click", "open", "flip",
 	"reveal_t1", "reveal_t2", "reveal_t3", "reveal_t4", "reveal_t5",
 	"promote_spin", "promote_success", "promote_hold", "promote_damage", "promote_breakdown",
-	"disassemble", "trade", "error",
+	"disassemble", "repair", "trade", "error",
 ]
 
 var muted := false

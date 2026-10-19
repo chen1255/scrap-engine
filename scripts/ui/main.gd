@@ -7,6 +7,7 @@ const MarketViewR := preload("res://scripts/ui/view_market.gd")
 const InventoryViewR := preload("res://scripts/ui/view_inventory.gd")
 const DisassemblyViewR := preload("res://scripts/ui/view_disassembly.gd")
 const PromotionViewR := preload("res://scripts/ui/view_promotion.gd")
+const RepairViewR := preload("res://scripts/ui/view_repair.gd")
 const ExchangeViewR := preload("res://scripts/ui/view_exchange.gd")
 const CodexViewR := preload("res://scripts/ui/view_codex.gd")
 
@@ -151,6 +152,7 @@ func _build_nav() -> Control:
 		["inventory", "仓库", "库存总览"],
 		["disassembly", "拆解台", "阶段二 · 全息提纯"],
 		["promotion", "熔炉", "阶段三 · 概率晋升"],
+		["repair", "维修台", "阶段四 · 品相精修"],
 		["exchange", "交易所", "单机模拟行情"],
 		["codex", "图鉴", "收集与检视"],
 	]
@@ -183,6 +185,7 @@ func _create_views() -> void:
 		["inventory", InventoryViewR],
 		["disassembly", DisassemblyViewR],
 		["promotion", PromotionViewR],
+		["repair", RepairViewR],
 		["exchange", ExchangeViewR],
 		["codex", CodexViewR],
 	]

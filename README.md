@@ -16,15 +16,17 @@ Godot 4.7.2 · GDScript · 零外部依赖 · 可离线单机运行
 
 ```
 黑市开盲盒 ──> 拆解台拆残骸 ──> 熔炉概率晋升 ──> 交易所变现
-     │                │                │
+     │                │                │              ▲
+     │                └──> 维修台修品相 ─┴──────────────┘
      └──────────── 图鉴收集 + 全息检视 ────────────┘
 ```
 
 1. **黑市 · 未知盲盒**：消耗信用点与体力购入未鉴定盲盒，开箱按掉落表（relative weight）抽 2~4 次。出货会写入图鉴，没见过的物品显示为「未知」占位图标。
 2. **拆解台**：把残骸（wreck）拆成同族的低级材料（material），拆解结果**继承原物品的品相**。
 3. **熔炉 · 概率晋升**：消耗 5 个同族同阶材料 + 信用点，抽一次签决定 `成功 / 稳定 / 损伤 / 崩解`；连续失败触发保底（pity），权重逐步向成功倾斜。最高可晋升到 T5。另有稳定剂与过载催化剂两种一次性道具、以及永久性的「概率校准器」元升级。
-4. **交易所**：模拟市场行情，价格随波动率浮动、按周期刷新，含手续费、买入溢价、抛售冲击与恢复，以及随机市场事件。
-5. **图鉴 + 全息检视**：42 件收集品的收集进度；点开任意物品进入全息检视面板，查看保养度、检视属性与词条。
+4. **维修台 · 品相精修 / 翻新**：品相决定卖价系数，开箱随机生成、拆解继承，却没有天然的回补手段。维修台提供两条路：**精修**（确定性，按档 +品相，费用已知）与**翻新**（一次性概率回补，抽一次签决定 `焕新 / 良修 / 徒劳`，可能白耗材料）。两者都消耗同族 T1 材料 + 信用点，于是「攒材料 → 修品相 → 卖出更高价 / 拆出更高品相的材料」的闭环成立。
+5. **交易所**：模拟市场行情，价格随波动率浮动、按周期刷新，含手续费、买入溢价、抛售冲击与恢复，以及随机市场事件。
+6. **图鉴 + 全息检视**：42 件收集品的收集进度；点开任意物品进入全息检视面板，查看保养度、检视属性与词条。
 
 ### 系统一览
 
@@ -33,9 +35,10 @@ Godot 4.7.2 · GDScript · 零外部依赖 · 可离线单机运行
 | 稀有度分层 | T1 废料级 → T2 标准级 → T3 精炼级 → T4 军工级 → T5 原型级，晋升只在相邻层级间进行 |
 | 族系 | 机械 mech / 生物 bio / 数据 data，各有一套专属检视属性维度（4 维） |
 | 品相（保养度） | 0~100 分档：崭新 / 良好 / 一般 / 磨损 / 报废；影响出售价系数，开箱时随机生成，拆解继承、晋升失败退还时保留 |
+| 维修台 | 两条回补路径：精修（确定性，每档 +10 品相，费用 = 基准价 × 4% + 同族 T1 材料 ×1）与翻新（一次性概率，费用 = 基准价 × 16% + 同族 T1 材料 ×2，抽签 45% 焕新 / 35% 良修 / 20% 徒劳） |
 | 词条 | 每族系 8 条，由物品 id 确定性抽取 —— 同一件物品的词条永远一致，不同存档可复现 |
 | 检视属性 | 每件物品 4 个数值，维度名由族系决定，数值取自 `data/items.json` |
-| 音效与演出 | 16 段程序化合成的短音效（零外部素材）+ 开箱逐件翻牌揭示、熔炉抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
+| 音效与演出 | 17 段程序化合成的短音效（零外部素材）+ 开箱逐件翻牌揭示、熔炉/翻新抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
 
 ### 数据规模
 
@@ -46,6 +49,7 @@ Godot 4.7.2 · GDScript · 零外部依赖 · 可离线单机运行
 | 黑市盲盒 | 4（未鉴定赛博废料 30c、加密数据盘 120c、军用级密封箱 450c、深渊打捞舱 1200c） |
 | 词条 | 24（3 族系 × 8 条） |
 | 晋升配方 | 4 段（T1→T2 至 T4→T5），各带独立概率与保底参数 |
+| 维修配置 | 精修 1 档 / 翻新 3 结果（焕新 / 良修 / 徒劳），费用与材料均按同族 T1 计 |
 | 品相档位 | 5 |
 
 所有数值均为纯数据驱动，改 JSON 即改玩法，无需碰代码。
@@ -60,18 +64,18 @@ scrap-engine/
 │   ├── items.json           #   42 件收集品：族系、阶次、价格、检视属性
 │   ├── rarities.json        #   阶次、族系、品相档位与开箱品相区间
 │   ├── loot_tables.json     #   黑市盲盒掉落表
-│   ├── recipes.json         #   晋升配方、道具、校准器
+│   ├── recipes.json         #   晋升配方、道具、校准器、维修台（精修 / 翻新）
 │   ├── traits.json          #   词条池
 │   └── market.json          #   行情波动、费率、市场事件
 ├── scenes/
 │   └── main.tscn            # 唯一主场景
 ├── scripts/
 │   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Sfx
-│   └── ui/                  # 主界面、6 个视图、全息检视面板、UI 组件库（含动效原语）
+│   └── ui/                  # 主界面、7 个视图、全息检视面板、UI 组件库（含动效原语）
 ├── shaders/                 # 全息卡片与全息图标着色器
 ├── assets/
 │   ├── icons/               # 43 张 512×512 透明物品图标（含「未知」占位）
-│   ├── audio/               # 16 段程序化合成的音效 WAV（由 tools/gen_sfx.gd 生成）
+│   ├── audio/               # 17 段程序化合成的音效 WAV（由 tools/gen_sfx.gd 生成）
 │   └── branding/            # 应用图标（png + 多尺寸 ico）
 ├── tests/                   # headless 概率自测
 └── tools/                   # 开发期工具：图标烘焙、音效合成、视图截图
@@ -89,18 +93,18 @@ scrap-engine/
 
 ### 音效与演出
 
-音效全部由脚本离线合成，仓库内不含任何第三方音频素材，许可证干净且可复现。16 段音效（点击 / 开箱 / 翻牌 / T1~T5 揭示 / 抽签滚动 / 成功 / 稳定 / 损伤 / 崩解 / 拆解 / 交易 / 错误）在 `assets/audio/`，由固定随机种子生成，重跑不产生差异：
+音效全部由脚本离线合成，仓库内不含任何第三方音频素材，许可证干净且可复现。17 段音效（点击 / 开箱 / 翻牌 / T1~T5 揭示 / 抽签滚动 / 成功 / 稳定 / 损伤 / 崩解 / 拆解 / 精修 / 交易 / 错误）在 `assets/audio/`，由固定随机种子生成，重跑不产生差异：
 
 ```powershell
 # 重新生成音效（仅在需要调整音色时执行）
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.tscn
 ```
 
-运行时由 `Sfx` 自动加载单例统一播放（10 路播放池、支持延迟触发与静音），HUD 右上角的「音效：开/关」按钮可随时切换。演出采用轻快利落风格：开箱逐件翻牌揭示（连开更快）、熔炉抽签滚动定格（点击任意处跳过），整套演出默认 1~2 秒内完成。
+运行时由 `Sfx` 自动加载单例统一播放（10 路播放池、支持延迟触发与静音），HUD 右上角的「音效：开/关」按钮可随时切换。演出采用轻快利落风格：开箱逐件翻牌揭示（连开更快）、熔炉与维修台翻新抽签滚动定格（点击任意处跳过），整套演出默认 1~2 秒内完成。
 
 ### 数值自测
 
-验证「黑市爆率」与「晋升抽签」的实际分布是否与配置一致（4 个盲盒 × 20000 次开箱、12 组晋升 × 1500 次抽签），通过时打印 `[PASS]` 并以退出码 0 结束：
+验证「黑市爆率」「晋升抽签」与「翻新抽签」的实际分布是否与配置一致，并断言精修为确定性操作（4 个盲盒 × 20000 次开箱、12 组晋升 × 1500 次抽签、翻新 × 3000 次），通过时打印 `[PASS]` 并以退出码 0 结束：
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_rates.tscn
@@ -120,7 +124,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 Godot_v4.7.2-stable_win64.exe --path . res://tools/shot.tscn -- --view=inventory --seed
 ```
 
-`--view=` 可选 `market / inventory / disassembly / promotion / exchange / codex`，`--inspect=<item_id>` 可直接打开全息检视面板。
+`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex`，`--inspect=<item_id>` 可直接打开全息检视面板。
 
 ### 许可
 
@@ -138,15 +142,17 @@ Built with Godot 4.7.2 / GDScript. No external dependencies, runs fully offline.
 
 ```
 Black market crates ──> Disassembly bench ──> Furnace promotion ──> Exchange
-        │                      │                     │
+        │                      │                    ▲                 ▲
+        │                      └──> Repair bench ───┴─────────────────┘
         └─────────── Codex collection + holographic inspection ───────────┘
 ```
 
 1. **Black market** — Spend credits and energy on unidentified crates; each open rolls 2–4 drops from a weighted loot table. New drops are recorded in the codex; unseen items render with an "unknown" placeholder icon.
 2. **Disassembly bench** — Break wrecks down into lower-tier materials of the same family. The resulting condition (wear) is inherited from the source item.
 3. **Furnace · probability promotion** — Consume 5 same-family same-tier materials plus credits for one draw: `success / hold / damage / breakdown`. Consecutive failures feed a pity system that shifts weight toward success. T5 is the ceiling. Also includes single-use items (stabilizer, overload catalyst) and a permanent "probability calibrator" meta-upgrade.
-4. **Exchange** — A simulated player market: volatile prices with periodic refresh, sell fees, buy markup, dump impact and recovery, plus random market events.
-5. **Codex + holographic inspection** — Track collection progress across 42 items and open any item to inspect its condition, stat bars, and traits.
+4. **Repair bench · precision & refurbish** — Condition scales sell price but is only rolled on unboxing and inherited on disassembly — with no natural way to restore it. The repair bench offers two routes: **precision repairs** (deterministic, +10 condition per grade at a known cost) and **refurbishing** (a one-shot probability restore: one draw for `renew / mend / futile`, which may waste materials). Both consume same-family T1 materials plus credits, closing the loop of *hoard materials → restore condition → sell for more / disassemble into higher-condition materials*.
+5. **Exchange** — A simulated player market: volatile prices with periodic refresh, sell fees, buy markup, dump impact and recovery, plus random market events.
+6. **Codex + holographic inspection** — Track collection progress across 42 items and open any item to inspect its condition, stat bars, and traits.
 
 ### At a glance
 
@@ -155,9 +161,10 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Rarity tiers | T1 SCRAP → T2 STANDARD → T3 REFINED → T4 MIL-SPEC → T5 PROTOTYPE; promotion only between adjacent tiers |
 | Families | mech / bio / data, each with its own 4 inspection-stat dimensions |
 | Condition | 0–100 graded as pristine / good / fair / worn / scrap; scales sell price. Rolled on unboxing, inherited on disassembly, preserved when a promotion fails |
+| Repair bench | Two restore routes: precision repairs (deterministic, +10 condition per grade, cost = base price × 4% + 1 same-family T1 material) and refurbishing (one-shot probability, cost = base price × 16% + 2 same-family T1 materials, drawing 45% renew / 35% mend / 20% futile) |
 | Traits | 8 per family, deterministically derived from the item id — the same item always rolls the same traits, so saves are reproducible |
 | Inspection stats | 4 numeric values per item; dimension names come from the family, values from `data/items.json` |
-| Audio & presentation | 16 procedurally synthesized sound effects (no external assets) plus card-by-card reveal, furnace draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
+| Audio & presentation | 17 procedurally synthesized sound effects (no external assets) plus card-by-card reveal, furnace/refurbish draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
 
 | Content | Count |
 |---|---|
@@ -166,6 +173,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Crates | 4 |
 | Traits | 24 (3 families × 8) |
 | Promotion recipes | 4 (T1→T2 … T4→T5), each with its own odds and pity parameters |
+| Repair config | 1 precision grade step / 3 refurbish outcomes (renew / mend / futile); costs in same-family T1 materials |
 | Condition grades | 5 |
 
 Everything is data-driven: change the JSON, change the game — no code edits needed.
@@ -179,18 +187,18 @@ Requires **Godot 4.7.2-stable**.
 
 ### Audio & presentation
 
-All sound effects are synthesized offline by a script — the repo ships no third-party audio, so licensing is clean and results are reproducible. The 16 effects (click / open / flip / T1–T5 reveal / draw spin / success / hold / damage / breakdown / disassemble / trade / error) live in `assets/audio/` and are generated from a fixed random seed, so re-running produces identical files:
+All sound effects are synthesized offline by a script — the repo ships no third-party audio, so licensing is clean and results are reproducible. The 17 effects (click / open / flip / T1–T5 reveal / draw spin / success / hold / damage / breakdown / disassemble / repair / trade / error) live in `assets/audio/` and are generated from a fixed random seed, so re-running produces identical files:
 
 ```powershell
 # Regenerate audio (only needed when tweaking the timbre)
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.tscn
 ```
 
-At runtime a `Sfx` autoload singleton handles playback (10-voice pool, delayed triggers, mute); the "Audio: on/off" button in the top-right HUD toggles mute at any time. Presentation is brisk and snappy: card-by-card crate reveals (faster when opening in bulk) and a spin-and-settle furnace draw that can be skipped by clicking anywhere, with each sequence finishing within 1–2 seconds.
+At runtime a `Sfx` autoload singleton handles playback (10-voice pool, delayed triggers, mute); the "Audio: on/off" button in the top-right HUD toggles mute at any time. Presentation is brisk and snappy: card-by-card crate reveals (faster when opening in bulk) and a spin-and-settle draw shared by the furnace and the refurbish bench (skippable by clicking anywhere), with each sequence finishing within 1–2 seconds.
 
 ### Drop-rate self-test
 
-Verifies that the actual distributions match the configured drop rates (4 crates × 20,000 opens, 12 promotion groups × 1,500 draws). Prints `[PASS]` and exits with code 0 on success:
+Verifies that the actual distributions match the configured rates for the black-market drops, the promotion draws, and the refurbish draws, and asserts that precision repairs are deterministic (4 crates × 20,000 opens, 12 promotion groups × 1,500 draws, refurbish × 3,000). Prints `[PASS]` and exits with code 0 on success:
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_rates.tscn

@@ -24,6 +24,7 @@ var stats: Dictionary = {
 	"opens": 0, "promote_attempts": 0,
 	"success": 0, "hold": 0, "damage": 0, "breakdown": 0,
 	"sold": 0, "bought": 0, "earned": 0, "spent": 0,
+	"repairs": 0, "refurbish": 0, "refurbish_fail": 0,
 }
 
 func _ready() -> void:
@@ -116,6 +117,15 @@ func add_item(id: String, n: int = 1, cond: float = -1.0) -> void:
 	inventory[id] = { "n": cur_n + n, "cs": cur_cs + c * float(n) }
 	_discover(id)
 	inventory_changed.emit()
+
+## 把某个物品堆的平均保养度直接设为目标值（0~100）。维修台精修 / 翻新用。
+func set_condition(id: String, cond: float) -> bool:
+	if count_of(id) <= 0:
+		return false
+	var n := count_of(id)
+	inventory[id] = { "n": n, "cs": clampf(cond, 0.0, 100.0) * float(n) }
+	inventory_changed.emit()
+	return true
 
 func remove_item(id: String, n: int = 1) -> bool:
 	if count_of(id) < n:

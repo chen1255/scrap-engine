@@ -39,5 +39,25 @@
     "price_base": 800,
     "price_growth": 1.9,
     "breakdown_reduction_per_level": 2
+  },
+  "repair": {
+    "_comment": "维修台。精修=确定性，每次把品相 +step（上限 max），费用=基准价*credit_ratio 信用点 + material_per_step 个同族 T1 材料。翻新=一次性概率回补，见 refurbish。",
+    "max": 100,
+    "step": 10,
+    "credit_ratio": 0.04,
+    "material_per_step": 1,
+    "material_tier": 1,
+    "refurbish": {
+      "_comment": "翻新：一次性投料抽一次签。费用=基准价*credit_ratio 信用点 + material 个同族 T1 材料；无论成败材料与信用点都会消耗。",
+      "credit_ratio": 0.16,
+      "material": 2,
+      "draw": [ ["pristine", 45], ["good", 35], ["fail", 20] ],
+      "targets": { "pristine": 100, "good": 75 },
+      "outcomes": {
+        "pristine": { "name": "焕新", "color": "#4FE38A", "desc": "整机翻新，保养度回满。" },
+        "good":     { "name": "良修", "color": "#4FC3F7", "desc": "修复到位，保养度回升到良好档。" },
+        "fail":     { "name": "徒劳", "color": "#FF5370", "desc": "修复失败，材料白耗，品相不变。" }
+      }
+    }
   }
 }

@@ -14,6 +14,7 @@ var recipes: Dictionary = {}          # 晋升配方
 var consumables: Dictionary = {}      # 晋升消耗品
 var calibrator: Dictionary = {}       # 概率校准器（永久元升级）
 var outcomes: Dictionary = {}         # 晋升结果的文案与配色
+var repair_cfg: Dictionary = {}       # 维修台：精修参数与翻新抽签
 var market_cfg: Dictionary = {}       # 交易所配置
 var trait_pools: Dictionary = {}      # family id -> Array[词条]
 var conditions: Array = []            # 保养度（品相）分档，按 min 从高到低
@@ -55,6 +56,7 @@ func _load_all() -> void:
 	consumables = recipes.get("consumables", {})
 	calibrator = recipes.get("calibrator", {})
 	outcomes = recipes.get("outcomes", {})
+	repair_cfg = recipes.get("repair", {})
 
 	market_cfg = _read_json("res://data/market.json")
 
@@ -177,3 +179,31 @@ func cond_roll_range() -> Vector2:
 ## 非开箱渠道（市场买入等）获得的物品的默认保养度
 func cond_default() -> float:
 	return float(cond_roll.get("default", 80))
+
+# ---------------- 维修台配置 ----------------
+
+func repair_max() -> float:
+	return float(repair_cfg.get("max", 100))
+
+func repair_step() -> float:
+	return float(repair_cfg.get("step", 10))
+
+func repair_credit_ratio() -> float:
+	return float(repair_cfg.get("credit_ratio", 0.04))
+
+func repair_material_tier() -> int:
+	return int(repair_cfg.get("material_tier", 1))
+
+func refurbish_cfg() -> Dictionary:
+	return repair_cfg.get("refurbish", {})
+
+## 翻新抽签表：outcome -> 权重
+func refurbish_weights() -> Dictionary:
+	var w: Dictionary = {}
+	for pair in refurbish_cfg().get("draw", []):
+		w[str(pair[0])] = float(pair[1])
+	return w
+
+## 翻新各结果的文案与配色
+func refurbish_outcomes() -> Dictionary:
+	return refurbish_cfg().get("outcomes", {})

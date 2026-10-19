@@ -53,6 +53,7 @@ func _recipes() -> Array:
 		{ "name": "promote_damage",   "buf": _sfx_damage() },
 		{ "name": "promote_breakdown","buf": _sfx_breakdown() },
 		{ "name": "disassemble",      "buf": _sfx_disassemble() },
+		{ "name": "repair",           "buf": _sfx_repair() },
 		{ "name": "trade",            "buf": _sfx_trade() },
 		{ "name": "error",            "buf": _sfx_error() },
 	]
@@ -144,6 +145,14 @@ func _sfx_disassemble() -> PackedFloat32Array:
 	var b := _buf(0.5)
 	_note(b, 0.0, 0.42, 180.0, 0.28, "saw", 0.003, 4.5, 520.0)
 	_note(b, 0.05, 0.35, 0.0, 0.16, "noise", 0.006, 7.0)
+	return b
+
+## 精修：两下短促的上行方波 + 薄噪声，像棘轮拧紧的感觉
+func _sfx_repair() -> PackedFloat32Array:
+	var b := _buf(0.34)
+	_note(b, 0.0, 0.10, 620.0, 0.22, "square", 0.001, 12.0, 900.0)
+	_note(b, 0.14, 0.11, 780.0, 0.20, "square", 0.001, 12.0, 1040.0)
+	_note(b, 0.0, 0.30, 0.0, 0.07, "noise", 0.004, 8.0)
 	return b
 
 ## 成交：两下上行方波，收银感

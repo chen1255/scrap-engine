@@ -1,10 +1,12 @@
 extends Node
-## headless 数值自测：验证「黑市爆率」与「晋升抽签」的实际分布是否与配置一致。
+## headless 数值自测：验证「黑市爆率」「晋升抽签」「翻新抽签」的实际分布是否与配置一致，
+## 并断言精修为确定性操作。
 ## 运行方式：
 ##   Godot_v4.7.2-stable_win64_console.exe --headless --path <工程目录> res://tests/sim_rates.tscn
 
 const CRATE_TRIALS := 20000
 const PROMOTE_TRIALS := 1500
+const REFURBISH_TRIALS := 3000
 
 var _fails := 0
 
@@ -12,6 +14,7 @@ func _ready() -> void:
 	print("==================== 废料引擎 · 概率自测 ====================")
 	_test_loot()
 	_test_promotion()
+	_test_repair()
 	print("===========================================================")
 	if _fails == 0:
 		print("[PASS] 全部分布检验通过，实际抽样与配置一致。")
@@ -182,3 +185,90 @@ func _simulate_promotion(family: String, from_tier: int) -> void:
 	print("         " + " | ".join(parts))
 	if not ok:
 		_fails += 1
+
+# ---------------- 维修台 ----------------
+
+func _test_repair() -> void:
+	print("\n---- 阶段四：维修台（精修确定性 / 翻新抽签）----")
+	_test_repair_deterministic()
+	_test_refurbish_distribution()
+
+## 精修是确定性的：给定档数修完，品相必须精确落到预期值，且费用与材料按计划扣除。
+func _test_repair_deterministic() -> void:
+	var id := "mat_mech_t2_valve"
+	GameState.add_item(id, 1, 35.0)
+	GameState.set_condition(id, 35.0)
+	GameState.add_item("mat_mech_t1_wire", 40)
+	GameState.add_credits(100000)
+
+	var steps := CraftSystem.repair_max_steps(id)
+	var plan := CraftSystem.repair_plan(id, steps)
+	var mats_before := _family_mat_total("mech")
+	var credits_before := GameState.credits
+	var res: Dictionary = CraftSystem.repair(id, steps)
+	var mats_spent := mats_before - _family_mat_total("mech")
+	var credits_spent := credits_before - GameState.credits
+
+	var after := GameState.condition_of(id)
+	var cond_ok := absf(after - float(plan["after"])) < 0.001 and absf(after - 100.0) < 0.001
+	var mats_ok := mats_spent == int(plan["materials_need"])
+	var credits_ok := credits_spent == int(plan["credits"])
+	var ok := bool(res.get("ok", false)) and cond_ok and mats_ok and credits_ok
+	if not ok:
+		_fails += 1
+	print("  精修 35→100 · %d 档 · 品相 %s · 材料扣 %d/%d %s · 信用点扣 %d/%d %s %s"
+		% [steps, "%.0f" % after, mats_spent, int(plan["materials_need"]),
+		   "OK" if mats_ok else "错", credits_spent, int(plan["credits"]),
+		   "OK" if credits_ok else "错", "[OK]" if ok else "[DEV]"])
+
+## 翻新是概率的：实际结果分布必须与 recipes.json 的 draw 权重一致。
+func _test_refurbish_distribution() -> void:
+	var id := "mat_mech_t2_valve"
+	var weights: Dictionary = GameData.refurbish_weights()
+	var wsum := 0.0
+	for k in weights:
+		wsum += float(weights[k])
+	if wsum <= 0.0:
+		print("  [FAIL] 翻新抽签表为空")
+		_fails += 1
+		return
+
+	var counts: Dictionary = {}
+	var done := 0
+	for _i in range(REFURBISH_TRIALS):
+		GameState.add_item(id, 1, 35.0)
+		GameState.set_condition(id, 35.0)
+		GameState.add_credits(100000)
+		GameState.add_item("mat_mech_t1_wire", 5)
+		var res: Dictionary = CraftSystem.refurbish(id)
+		if not res.get("ok", false):
+			continue
+		var oc := str(res["outcome"])
+		counts[oc] = int(counts.get(oc, 0)) + 1
+		done += 1
+
+	if done == 0:
+		print("  [FAIL] 一次翻新都没能执行")
+		_fails += 1
+		return
+
+	var max_dev := 0.0
+	var parts := PackedStringArray()
+	for key in ["pristine", "good", "fail"]:
+		var exp := float(weights.get(key, 0.0)) / wsum
+		var act := float(counts.get(key, 0)) / float(done)
+		max_dev = maxf(max_dev, absf(act - exp))
+		parts.append("%s 期望%.1f%% 实际%.1f%%" % [key, exp * 100.0, act * 100.0])
+
+	var ok := max_dev <= 0.03
+	print("  翻新 试 %d 次 · 最大偏差 %.2f%% %s" % [done, max_dev * 100.0, "[OK]" if ok else "[DEV]"])
+	print("         " + " | ".join(parts))
+	if not ok:
+		_fails += 1
+
+## 统计某族系当前持有的 T1 材料总数（用于校验精修的确定性扣费）
+func _family_mat_total(family: String) -> int:
+	var n := 0
+	for mid in GameData.items_matching({ "kind": "material", "family": family, "tier": GameData.repair_material_tier() }):
+		n += GameState.count_of(mid)
+	return n

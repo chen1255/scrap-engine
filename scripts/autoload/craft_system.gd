@@ -1,9 +1,11 @@
 extends Node
-## 阶段二（拆解提纯）与阶段三（概率晋升）。
+## 阶段二（拆解提纯）、阶段三（概率晋升）与阶段四（维修台：精修 / 翻新）。
 ## 晋升是整款游戏的核心：抽一次签决定成功/稳定/损伤/崩解，玩家用消耗品和校准器去改这张签。
+## 维修台则用来回补损耗掉的品相（保养度），让低品相物品重新变得值钱。
 
 signal disassembled(wreck_id: String, outputs: Dictionary)
 signal promotion_resolved(payload: Dictionary)
+signal repair_resolved(payload: Dictionary)
 
 # ---------------- 阶段二：拆解 ----------------
 
@@ -224,3 +226,149 @@ func upgrade_calibrator() -> bool:
 	GameState.calibrator_level += 1
 	GameState.save_game()
 	return true
+
+# ---------------- 阶段四：维修台 ----------------
+## 精修：确定性，每次把品相 +step（上限 max），费用=基准价*credit_ratio + 同族 T1 材料。
+## 翻新：一次性概率回补，投料后抽一次签（焕新 / 良修 / 徒劳），成败都会消耗材料与信用点。
+
+## 还能精修几档（品相距上限还差几个 step）
+func repair_max_steps(item_id: String) -> int:
+	var st := GameData.repair_step()
+	if st <= 0.0 or GameState.count_of(item_id) <= 0:
+		return 0
+	var diff := GameData.repair_max() - GameState.condition_of(item_id)
+	return int(ceil(maxf(0.0, diff) / st))
+
+## 精修费用：同族 T1 材料池里现有总数
+func _family_material_total(family: String, tier: int) -> int:
+	var n := 0
+	for id in GameData.items_matching({ "kind": "material", "family": family, "tier": tier }):
+		n += GameState.count_of(id)
+	return n
+
+func repair_credit_per_step(item_id: String) -> int:
+	var base := float(GameData.get_item(item_id).get("base_price", 1))
+	return maxi(1, int(round(base * GameData.repair_credit_ratio())))
+
+## 精修计划：给定档数，算出费用、材料、以及修完后的品相（可用于 UI 预览）
+func repair_plan(item_id: String, steps: int) -> Dictionary:
+	var st := clampi(steps, 0, repair_max_steps(item_id))
+	var per := int(GameData.repair_cfg.get("material_per_step", 1))
+	var need := st * per
+	var credits := repair_credit_per_step(item_id) * st
+	var before := GameState.condition_of(item_id)
+	var after := minf(GameData.repair_max(), before + GameData.repair_step() * float(st))
+	var fam := str(GameData.get_item(item_id).get("family", ""))
+	var mtier := GameData.repair_material_tier()
+	return {
+		"steps": st, "credits": credits, "materials_need": need,
+		"materials_have": _family_material_total(fam, mtier),
+		"before": before, "after": after,
+	}
+
+## 精修。steps = 档数（会被夹到上限内）。
+func repair(item_id: String, steps: int) -> Dictionary:
+	if GameState.count_of(item_id) <= 0:
+		return { "ok": false, "reason": "库存里没有这件物品" }
+	if repair_max_steps(item_id) <= 0:
+		return { "ok": false, "reason": "品相已满，无需精修" }
+	var plan := repair_plan(item_id, steps)
+	var st := int(plan["steps"])
+	if st <= 0:
+		return { "ok": false, "reason": "无需精修" }
+	if GameState.credits < int(plan["credits"]):
+		return { "ok": false, "reason": "信用点不足（需要 %d）" % int(plan["credits"]) }
+	if int(plan["materials_have"]) < int(plan["materials_need"]):
+		return { "ok": false, "reason": "同族 T1 材料不足（需要 %d，现有 %d）" % [int(plan["materials_need"]), int(plan["materials_have"])] }
+
+	var fam := str(GameData.get_item(item_id).get("family", ""))
+	GameState.spend_credits(int(plan["credits"]))
+	_take_family_material(fam, GameData.repair_material_tier(), int(plan["materials_need"]))
+	GameState.set_condition(item_id, float(plan["after"]))
+	GameState.stats["repairs"] = int(GameState.stats.get("repairs", 0)) + 1
+	GameState.save_game()
+
+	var payload := {
+		"ok": true, "mode": "repair", "item": item_id, "steps": st,
+		"before": float(plan["before"]), "after": float(plan["after"]),
+		"credits": int(plan["credits"]), "materials": int(plan["materials_need"]),
+	}
+	repair_resolved.emit(payload)
+	return payload
+
+## 翻新费用
+func refurbish_cost(item_id: String) -> Dictionary:
+	var rc: Dictionary = GameData.refurbish_cfg()
+	var base := float(GameData.get_item(item_id).get("base_price", 1))
+	var fam := str(GameData.get_item(item_id).get("family", ""))
+	return {
+		"credits": maxi(1, int(round(base * float(rc.get("credit_ratio", 0.16))))),
+		"materials_need": int(rc.get("material", 2)),
+		"materials_have": _family_material_total(fam, GameData.repair_material_tier()),
+	}
+
+## 翻新的抽签表与目标值（UI 展示用）
+func refurbish_preview(item_id: String) -> Dictionary:
+	return {
+		"weights": GameData.refurbish_weights(),
+		"targets": GameData.refurbish_cfg().get("targets", {}),
+		"outcomes": GameData.refurbish_outcomes(),
+		"condition": GameState.condition_of(item_id),
+	}
+
+func can_refurbish(item_id: String) -> Dictionary:
+	if GameState.count_of(item_id) <= 0:
+		return { "ok": false, "reason": "库存里没有这件物品" }
+	if GameState.condition_of(item_id) >= GameData.repair_max():
+		return { "ok": false, "reason": "品相已满，无需翻新" }
+	var cost := refurbish_cost(item_id)
+	if GameState.credits < int(cost["credits"]):
+		return { "ok": false, "reason": "信用点不足（需要 %d）" % int(cost["credits"]) }
+	if int(cost["materials_have"]) < int(cost["materials_need"]):
+		return { "ok": false, "reason": "同族 T1 材料不足（需要 %d，现有 %d）" % [int(cost["materials_need"]), int(cost["materials_have"])] }
+	return { "ok": true }
+
+## 翻新。抽一次签：焕新（回满）/ 良修（回到良好档）/ 徒劳（品相不变）。材料与信用点无论成败都消耗。
+func refurbish(item_id: String) -> Dictionary:
+	var check := can_refurbish(item_id)
+	if not check["ok"]:
+		return check
+	var before := GameState.condition_of(item_id)
+	var cost := refurbish_cost(item_id)
+	var fam := str(GameData.get_item(item_id).get("family", ""))
+
+	GameState.spend_credits(int(cost["credits"]))
+	_take_family_material(fam, GameData.repair_material_tier(), int(cost["materials_need"]))
+
+	var outcome := _roll(GameData.refurbish_weights())
+	var targets: Dictionary = GameData.refurbish_cfg().get("targets", {})
+	var after := before
+	if outcome != "fail" and targets.has(outcome):
+		after = maxf(before, float(targets[outcome]))
+		GameState.set_condition(item_id, after)
+
+	GameState.stats["refurbish"] = int(GameState.stats.get("refurbish", 0)) + 1
+	if outcome == "fail":
+		GameState.stats["refurbish_fail"] = int(GameState.stats.get("refurbish_fail", 0)) + 1
+	GameState.save_game()
+
+	var payload := {
+		"ok": true, "mode": "refurbish", "item": item_id, "outcome": outcome,
+		"before": before, "after": after,
+		"credits": int(cost["credits"]), "materials": int(cost["materials_need"]),
+	}
+	repair_resolved.emit(payload)
+	return payload
+
+## 从同族 T1 材料池里扣掉 need 个（优先库存最多的）。调用前须确保数量充足。
+func _take_family_material(family: String, tier: int, need: int) -> void:
+	var pool: Array = GameData.items_matching({ "kind": "material", "family": family, "tier": tier })
+	pool.sort_custom(func(a, b): return GameState.count_of(a) > GameState.count_of(b))
+	var left := need
+	for id in pool:
+		if left <= 0:
+			break
+		var take: int = mini(left, GameState.count_of(id))
+		if take > 0:
+			GameState.remove_item(id, take)
+			left -= take
