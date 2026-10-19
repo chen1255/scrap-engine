@@ -10,6 +10,7 @@ var _family := "mech"
 var _from_tier := 1
 var _use_stab := false
 var _use_boost := false
+var _catalyst := ""          # 本次晋升选用的核心催化剂 id（空 = 不投入）
 var _last: Dictionary = {}
 var _spin_layer: Control
 var _spin_title: Label
@@ -57,6 +58,7 @@ func _rebuild_all() -> void:
 	left.add_child(_family_panel())
 	left.add_child(_step_panel())
 	left.add_child(_odds_panel())
+	left.add_child(_catalyst_panel())
 	left.add_child(_action_panel())
 
 	var right := UIKit.vbox(10)
@@ -127,14 +129,18 @@ func _step_panel() -> Control:
 		v.add_child(row)
 	return p
 
+## 本次晋升的选项集合：消耗品开关 + 选用的催化核心。
+func _opts() -> Dictionary:
+	return { "use_stabilizer": _use_stab, "use_booster": _use_boost, "catalyst": _catalyst }
+
 func _odds_panel() -> Control:
 	var p := UIKit.panel(UIKit.BG_SOFT, 10, UIKit.LINE)
 	var m := _margin(p, 12)
 	var v := UIKit.vbox(8)
 	m.add_child(v)
-	v.add_child(UIKit.label("③ 本次抽签表（受校准器 / 消耗品 / 保底影响）", 13, UIKit.MUTED))
+	v.add_child(UIKit.label("③ 本次抽签表（受校准器 / 消耗品 / 核心催化 / 保底影响）", 13, UIKit.MUTED))
 
-	var weights: Dictionary = CraftSystem.preview_odds(_family, _from_tier, { "use_stabilizer": _use_stab, "use_booster": _use_boost })
+	var weights: Dictionary = CraftSystem.preview_odds(_family, _from_tier, _opts())
 	var total := 0.0
 	for k in weights:
 		total += float(weights[k])
@@ -167,11 +173,64 @@ func _odds_panel() -> Control:
 		% [fails, thr, float(pity.get("per_fail", 0))], 11, UIKit.WARN if fails > 0 else UIKit.MUTED))
 	return p
 
+func _catalyst_panel() -> Control:
+	var p := UIKit.panel(UIKit.BG_SOFT, 10, UIKit.LINE)
+	var m := _margin(p, 12)
+	var v := UIKit.vbox(8)
+	m.add_child(v)
+	v.add_child(UIKit.label("④ 核心催化（可选 · 每次晋升最多 %d 个）" % GameData.catalyst_max_per_promotion(), 13, UIKit.MUTED))
+
+	# 选中的核心可能已被上一次晋升消耗，先兜底清除
+	if _catalyst != "" and not CraftSystem.can_use_catalyst(_catalyst):
+		_catalyst = ""
+
+	var opts: Array = CraftSystem.catalyst_options()
+	if opts.is_empty():
+		v.add_child(UIKit.muted("仓库里没有核心。核心由高级盲盒低概率掉落；投入熔炉可把它写明在档案里的成功率加成真正兑现，但该核心会被消耗。", 12))
+		return p
+
+	for id in opts:
+		var row := UIKit.hbox(8)
+		var b := UIKit.btn("%s  +%d 成功率" % [GameData.item_name(id), int(CraftSystem.catalyst_points(id))], false, 250)
+		b.tooltip_text = str(GameData.get_item(id).get("desc", ""))
+		if id == _catalyst:
+			b.add_theme_stylebox_override("normal", UIKit.sb(UIKit.WARN, 8, Color("#FFD79A")))
+			b.add_theme_color_override("font_color", Color("#0B0E14"))
+		b.pressed.connect(func():
+			_catalyst = "" if _catalyst == id else id
+			refresh())
+		row.add_child(b)
+		row.add_child(UIKit.chip("持有 ×%d" % GameState.count_of(id),
+			GameData.family_color(str(GameData.get_item(id).get("family", ""))), 11))
+		row.add_child(UIKit.spacer())
+		v.add_child(row)
+
+	var foot := UIKit.hbox(8)
+	var clear := UIKit.btn("不投入", false, 90)
+	clear.disabled = _catalyst == ""
+	clear.pressed.connect(func():
+		_catalyst = ""
+		refresh())
+	foot.add_child(clear)
+	foot.add_child(UIKit.spacer())
+	v.add_child(foot)
+
+	if _catalyst == "":
+		v.add_child(UIKit.muted("当前未投入核心，抽签表保持原样。", 12))
+	else:
+		var w := UIKit.label("本次投入 %s：成功权重 +%d（从损伤 / 崩解扣除），该核心将被消耗。"
+			% [GameData.item_name(_catalyst), int(CraftSystem.catalyst_points(_catalyst))], 12, UIKit.WARN)
+		w.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		w.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		v.add_child(w)
+	return p
+
 func _action_panel() -> Control:
 	var p := UIKit.panel(UIKit.BG_SOFT, 10, UIKit.LINE)
 	var m := _margin(p, 12)
 	var v := UIKit.vbox(8)
 	m.add_child(v)
+	v.add_child(UIKit.label("⑤ 执行晋升", 13, UIKit.MUTED))
 
 	var toggles := UIKit.hbox(10)
 	for pair in [["stabilizer", "稳定剂", "_use_stab"], ["booster", "过载催化剂", "_use_boost"]]:
@@ -215,7 +274,7 @@ func _action_panel() -> Control:
 	return p
 
 func _do_promote() -> void:
-	var res: Dictionary = CraftSystem.promote(_family, _from_tier, [], { "use_stabilizer": _use_stab, "use_booster": _use_boost })
+	var res: Dictionary = CraftSystem.promote(_family, _from_tier, [], _opts())
 	if not res.get("ok", false):
 		Sfx.play_error()
 		toast_requested.emit(str(res.get("reason", "晋升失败")))
@@ -237,6 +296,9 @@ func _do_promote() -> void:
 			tail = "损失 %d 个材料" % (res["lost"] as Array).size()
 		"breakdown":
 			tail = "材料全部崩解"
+	var cat_id := str(res.get("catalyst", ""))
+	if cat_id != "":
+		tail += " · 催化核心 %s 已被熔炉吞噬" % GameData.item_name(cat_id)
 	toast_requested.emit("%s —— %s" % [str(oc.get("name", "")), tail])
 
 # ---------------- 抽签演出 ----------------
@@ -381,6 +443,9 @@ func _stats_panel() -> Control:
 	v.add_child(UIKit.label("开箱 %d 次 · 成交 %d 笔 · 累计收入 ₡%d · 累计支出 ₡%d"
 		% [int(GameState.stats.get("opens", 0)), int(GameState.stats.get("sold", 0)) + int(GameState.stats.get("bought", 0)),
 		   int(GameState.stats.get("earned", 0)), int(GameState.stats.get("spent", 0))], 11, UIKit.MUTED))
+	v.add_child(UIKit.label("核心催化 %d 次 · 精修 %d 次 · 翻新 %d 次（徒劳 %d）"
+		% [int(GameState.stats.get("catalyst_used", 0)), int(GameState.stats.get("repairs", 0)),
+		   int(GameState.stats.get("refurbish", 0)), int(GameState.stats.get("refurbish_fail", 0))], 11, UIKit.MUTED))
 	return p
 
 func _margin(parent: Control, px: int) -> MarginContainer:

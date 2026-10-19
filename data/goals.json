@@ -97,6 +97,20 @@
 			"desc": "图鉴收录全部 42 件收集品。",
 			"rule": { "type": "codex_count", "found": 42 },
 			"reward": { "credits": 2000, "energy": 3 }
+		},
+		{
+			"id": "g_catalyst_first",
+			"name": "核心催化",
+			"desc": "在熔炉晋升时首次投入一个核心作为催化剂。",
+			"rule": { "type": "stat", "key": "catalyst_used", "at_least": 1 },
+			"reward": { "credits": 200, "energy": 1 }
+		},
+		{
+			"id": "g_core_reserve",
+			"name": "核心储备",
+			"desc": "同时持有 3 个核心（熔炉之核 / 再生之核 / 预言之核，均为 T4）。",
+			"rule": { "type": "own_kind_tier", "kind": "core", "tier": 4, "count": 3 },
+			"reward": { "credits": 500 }
 		}
 	]
 }

@@ -484,7 +484,8 @@ func _rebuild_inspect_info(item_id: String, item: Dictionary) -> void:
 			uses.append("作为拆解/晋升的原材料")
 		_inspect_info.add_child(_kv("用途", "、".join(uses) if uses.size() > 0 else "可作为晋升材料"))
 	elif kind == "core":
-		_inspect_info.add_child(_kv("催化剂加成", "+%.0f%% 成功率" % (float(item.get("catalyst_bonus", 0.0)) * 100.0)))
+		_inspect_info.add_child(_kv("催化剂加成", "本次晋升成功权重 +%d（从损伤 / 崩解扣除）" % int(CraftSystem.catalyst_points(item_id))))
+		_inspect_info.add_child(_kv("用途", "在熔炉晋升时作为催化剂投入，每次最多 1 个，投入即消耗"))
 
 func _is_recipe_input(_id: String) -> bool:
 	return true

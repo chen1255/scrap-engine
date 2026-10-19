@@ -13,6 +13,7 @@ var crate_map: Dictionary = {}
 var recipes: Dictionary = {}          # 晋升配方
 var consumables: Dictionary = {}      # 晋升消耗品
 var calibrator: Dictionary = {}       # 概率校准器（永久元升级）
+var catalyst_cfg: Dictionary = {}     # 核心催化（晋升时投入核心换成功率）
 var outcomes: Dictionary = {}         # 晋升结果的文案与配色
 var repair_cfg: Dictionary = {}       # 维修台：精修参数与翻新抽签
 var market_cfg: Dictionary = {}       # 交易所配置
@@ -55,6 +56,7 @@ func _load_all() -> void:
 	recipes = _read_json("res://data/recipes.json")
 	consumables = recipes.get("consumables", {})
 	calibrator = recipes.get("calibrator", {})
+	catalyst_cfg = recipes.get("catalyst", {})
 	outcomes = recipes.get("outcomes", {})
 	repair_cfg = recipes.get("repair", {})
 
@@ -108,6 +110,10 @@ func promotion_step(from_tier: int) -> Dictionary:
 
 func max_tier() -> int:
 	return int(tiers[-1]["tier"]) if tiers.size() > 0 else 1
+
+## 每次晋升最多可投入的催化剂核心数量（recipes.json 的 catalyst 块）
+func catalyst_max_per_promotion() -> int:
+	return maxi(1, int(catalyst_cfg.get("max_per_promotion", 1)))
 
 ## 按 filter 过滤物品。filter 支持 kind / tier / family 三个键。
 func items_matching(filter: Dictionary) -> Array:

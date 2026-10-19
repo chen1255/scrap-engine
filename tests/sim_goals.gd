@@ -61,6 +61,12 @@ func _test_rules() -> void:
 	_check(not Rules.meets({ "type": "calibrator_max" }), "calibrator_max：未满级 未达成")
 	GameState.calibrator_level = 0
 
+	# 核心催化计数（阶段六新增统计键）：与其它 stat 规则同一条路径
+	GameState.stats["catalyst_used"] = 1
+	_check(Rules.meets({ "type": "stat", "key": "catalyst_used", "at_least": 1 }), "stat：catalyst_used 1 >= 1 达成")
+	_check(Rules.progress({ "type": "stat", "key": "catalyst_used", "at_least": 3 }) == [1, 3], "stat 进度 [1, 3]")
+	GameState.stats["catalyst_used"] = 0
+
 	_check(not Rules.meets({ "type": "unknown_x" }), "未知规则类型：meets 返回 false")
 	_check(Rules.progress({ "type": "unknown_x" }) == [0, 0], "未知规则类型：progress 返回 [0, 0]")
 
@@ -71,7 +77,7 @@ func _test_rules() -> void:
 
 func _test_goal_defs() -> void:
 	print("\n---- 2) 目标定义 ----")
-	_check(Objectives.defs.size() == 14, "目标条目 %d 条" % Objectives.defs.size())
+	_check(Objectives.defs.size() == 16, "目标条目 %d 条" % Objectives.defs.size())
 	var ids := {}
 	var ok_fields := true
 	var ok_reward := true
@@ -85,7 +91,7 @@ func _test_goal_defs() -> void:
 	_check(ids.size() == Objectives.defs.size(), "目标 id 唯一（%d）" % ids.size())
 	_check(ok_fields, "每条目标都有 name / desc / rule")
 	_check(ok_reward, "每条目标都有 reward")
-	_check(Objectives.counts() == [0, 14], "新档目标完成数 [0, 14]")
+	_check(Objectives.counts() == [0, 16], "新档目标完成数 [0, 16]")
 	_check(Objectives.claimable_count() == 0, "新档可领取数 = 0")
 
 # ---------------- 3) 目标生命周期 ----------------

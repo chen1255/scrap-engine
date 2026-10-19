@@ -81,9 +81,43 @@ func preview_odds(family: String, from_tier: int, opts: Dictionary = {}) -> Dict
 		weights["damage"] = float(weights.get("damage", 0.0)) + float(weights.get("breakdown", 0.0))
 		weights["breakdown"] = 0.0
 
+	# 核心催化：投入 1 个核心，其 catalyst_bonus 折算为权重点，同样从「损伤 + 崩解」转给「成功」。
+	# 只有在该核心真实持有时才生效——保证「不投入核心」时抽签表与既有版本逐位一致。
+	var cat := str(opts.get("catalyst", ""))
+	if can_use_catalyst(cat):
+		var cpoints := catalyst_points(cat)
+		var cpool: float = float(weights.get("damage", 0.0)) + float(weights.get("breakdown", 0.0))
+		var cmoved: float = minf(cpool, cpoints)
+		weights["success"] = float(weights.get("success", 0.0)) + cmoved
+		var c_from_damage: float = minf(float(weights.get("damage", 0.0)), cmoved)
+		weights["damage"] = float(weights.get("damage", 0.0)) - c_from_damage
+		weights["breakdown"] = float(weights.get("breakdown", 0.0)) - (cmoved - c_from_damage)
+
 	for k in weights.keys():
 		weights[k] = maxf(0.0, float(weights[k]))
 	return weights
+
+# ---------------- 核心催化 ----------------
+
+## 核心的加成折算：items.json 的 catalyst_bonus（0.15）= 15 权重点，与过载催化剂同量纲。
+func catalyst_points(item_id: String) -> float:
+	return float(GameData.get_item(item_id).get("catalyst_bonus", 0.0)) * 100.0
+
+## 该物品能否作为催化剂投入：必须是核心，且手里真的有。
+func can_use_catalyst(item_id: String) -> bool:
+	if item_id == "":
+		return false
+	if str(GameData.get_item(item_id).get("kind", "")) != "core":
+		return false
+	return GameState.count_of(item_id) > 0
+
+## 库存里可作催化剂的核心列表（保持 items.json 的稳定顺序），供熔炉 UI 展示。
+func catalyst_options() -> Array:
+	var out: Array = []
+	for id in GameData.items_matching({ "kind": "core" }):
+		if GameState.count_of(id) > 0:
+			out.append(id)
+	return out
 
 ## 执行一次晋升。
 ## family/from_tier 决定阶位；consume_ids 是玩家手动选的 5 个材料（空则自动从库存挑）。
@@ -110,6 +144,15 @@ func promote(family: String, from_tier: int, consume_ids: Array = [], opts: Dict
 	if GameState.credits < cost + extra:
 		return { "ok": false, "reason": "信用点不足（含消耗品需要 %d）" % (cost + extra) }
 
+	# 核心催化：必须手里真的有这个核心才允许投入（不额外收费，但会被消耗）
+	var cat := str(opts.get("catalyst", ""))
+	if cat != "" and not can_use_catalyst(cat):
+		return { "ok": false, "reason": "催化核心不足（需要 %s）" % GameData.item_name(cat) }
+
+	# 抽签表必须在此刻算好：催化加成的判定依赖「投入时确实持有该核心」，
+	# 放到消耗之后再算的话，核心已被移除、加成会凭空消失。
+	var weights := preview_odds(family, from_tier, opts)
+
 	# 先记下被消耗材料各自的保养度，退回时原样还回，避免无谓掉品相
 	var conds: Dictionary = {}
 	for id in chosen:
@@ -118,8 +161,10 @@ func promote(family: String, from_tier: int, consume_ids: Array = [], opts: Dict
 	GameState.spend_credits(cost + extra)
 	for id in chosen:
 		GameState.remove_item(id, 1)
+	if cat != "":
+		GameState.remove_item(cat, 1)
+		GameState.stats["catalyst_used"] = int(GameState.stats.get("catalyst_used", 0)) + 1
 
-	var weights := preview_odds(family, from_tier, opts)
 	var outcome := _roll(weights)
 	GameState.stats["promote_attempts"] += 1
 	GameState.stats[outcome] = int(GameState.stats.get(outcome, 0)) + 1
@@ -127,6 +172,7 @@ func promote(family: String, from_tier: int, consume_ids: Array = [], opts: Dict
 	var payload := {
 		"ok": true, "outcome": outcome, "family": family, "from_tier": from_tier,
 		"consume": chosen, "gained": "", "lost": [], "cost": cost + extra,
+		"catalyst": cat,
 		"weights": weights, "pity_before": GameState.pity_count(family, from_tier),
 	}
 

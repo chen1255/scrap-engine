@@ -40,6 +40,10 @@
     "price_growth": 1.9,
     "breakdown_reduction_per_level": 2
   },
+  "catalyst": {
+    "_comment": "核心催化：晋升时可额外投入 1 个「核心」物品（items.json 中 kind=core）。其 catalyst_bonus（如 0.15）折算为权重点（0.15 → 15），与「过载催化剂」同语义：从「损伤 + 崩解」中扣除并转入「成功」。核心在该次晋升中被一并消耗，不额外收费；每次晋升最多投入 max_per_promotion 个。",
+    "max_per_promotion": 1
+  },
   "repair": {
     "_comment": "维修台。精修=确定性，每次把品相 +step（上限 max），费用=基准价*credit_ratio 信用点 + material_per_step 个同族 T1 材料。翻新=一次性概率回补，见 refurbish。",
     "max": 100,

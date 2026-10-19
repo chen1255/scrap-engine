@@ -32,6 +32,7 @@ var stats: Dictionary = {
 	"success": 0, "hold": 0, "damage": 0, "breakdown": 0,
 	"sold": 0, "bought": 0, "earned": 0, "spent": 0,
 	"repairs": 0, "refurbish": 0, "refurbish_fail": 0,
+	"catalyst_used": 0,
 }
 
 func _ready() -> void:
