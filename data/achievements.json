@@ -1,0 +1,23 @@
+{
+	"achievements": [
+		{ "id": "first_open", "name": "初次开箱", "desc": "在轨道黑市开出第一个盲盒。", "hidden": false, "steam": "ACH_FIRST_OPEN", "rule": { "type": "stat", "key": "opens", "at_least": 1 } },
+		{ "id": "open_100", "name": "淘金老手", "desc": "累计开箱 100 次。", "hidden": false, "steam": "ACH_OPEN_100", "rule": { "type": "stat", "key": "opens", "at_least": 100 } },
+		{ "id": "first_dismantle", "name": "第一刀", "desc": "首次把残骸送进拆解台提纯。", "hidden": false, "steam": "ACH_FIRST_DISMANTLE", "rule": { "type": "stat", "key": "dismantles", "at_least": 1 } },
+		{ "id": "first_promote", "name": "点火", "desc": "在熔炉完成第一次概率晋升尝试。", "hidden": false, "steam": "ACH_FIRST_PROMOTE", "rule": { "type": "stat", "key": "promote_attempts", "at_least": 1 } },
+		{ "id": "first_success", "name": "晋升成功", "desc": "首次晋升成功。", "hidden": false, "steam": "ACH_FIRST_SUCCESS", "rule": { "type": "stat", "key": "success", "at_least": 1 } },
+		{ "id": "success_10", "name": "量产工艺", "desc": "晋升成功累计 10 次。", "hidden": false, "steam": "ACH_SUCCESS_10", "rule": { "type": "stat", "key": "success", "at_least": 10 } },
+		{ "id": "first_breakdown", "name": "灰飞烟灭", "desc": "第一次尝到崩解的滋味。", "hidden": true, "steam": "ACH_FIRST_BREAKDOWN", "rule": { "type": "stat", "key": "breakdown", "at_least": 1 } },
+		{ "id": "first_sell", "name": "第一桶金", "desc": "在交易所卖出第一件物品。", "hidden": false, "steam": "ACH_FIRST_SELL", "rule": { "type": "stat", "key": "sold", "at_least": 1 } },
+		{ "id": "credits_10k", "name": "万元户", "desc": "信用点余额达到 10000。", "hidden": false, "steam": "ACH_CREDITS_10K", "rule": { "type": "credits", "at_least": 10000 } },
+		{ "id": "first_repair", "name": "妙手回春", "desc": "首次在维修台精修物品。", "hidden": false, "steam": "ACH_FIRST_REPAIR", "rule": { "type": "stat", "key": "repairs", "at_least": 1 } },
+		{ "id": "first_refurbish", "name": "翻新试试", "desc": "首次尝试一次性概率翻新。", "hidden": false, "steam": "ACH_FIRST_REFURBISH", "rule": { "type": "stat", "key": "refurbish", "at_least": 1 } },
+		{ "id": "codex_10", "name": "档案起步", "desc": "图鉴收录 10 件收集品。", "hidden": false, "steam": "ACH_CODEX_10", "rule": { "type": "codex_count", "found": 10 } },
+		{ "id": "codex_half", "name": "半壁江山", "desc": "图鉴收录半数（21 件）。", "hidden": false, "steam": "ACH_CODEX_HALF", "rule": { "type": "codex_count", "found": 21 } },
+		{ "id": "codex_all", "name": "全息收藏家", "desc": "图鉴收录全部 42 件收集品。", "hidden": false, "steam": "ACH_CODEX_ALL", "rule": { "type": "codex_count", "found": 42 } },
+		{ "id": "family_mech_all", "name": "机械全收", "desc": "机械族系图鉴全部收齐。", "hidden": false, "steam": "ACH_FAMILY_MECH", "rule": { "type": "codex_family_all", "family": "mech" } },
+		{ "id": "family_bio_all", "name": "生物全收", "desc": "生物族系图鉴全部收齐。", "hidden": false, "steam": "ACH_FAMILY_BIO", "rule": { "type": "codex_family_all", "family": "bio" } },
+		{ "id": "family_data_all", "name": "数据全收", "desc": "数据族系图鉴全部收齐。", "hidden": false, "steam": "ACH_FAMILY_DATA", "rule": { "type": "codex_family_all", "family": "data" } },
+		{ "id": "own_t5", "name": "触碰原型", "desc": "拥有任意一件 T5 原型级材料。", "hidden": false, "steam": "ACH_OWN_T5", "rule": { "type": "own_kind_tier", "kind": "material", "tier": 5, "count": 1 } },
+		{ "id": "calibrator_max", "name": "概率主宰", "desc": "把概率校准器升到满级。", "hidden": false, "steam": "ACH_CALIBRATOR_MAX", "rule": { "type": "calibrator_max" } }
+	]
+}

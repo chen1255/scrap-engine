@@ -24,6 +24,13 @@ LootSystem="*res://scripts/autoload/loot_system.gd"
 CraftSystem="*res://scripts/autoload/craft_system.gd"
 MarketSystem="*res://scripts/autoload/market_system.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
+Achievements="*res://scripts/autoload/achievements.gd"
+SteamService="*res://scripts/autoload/steam_service.gd"
+
+[steam]
+
+steam/auto_init=false
+steam/embed_callbacks=false
 
 [display]
 

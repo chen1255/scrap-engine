@@ -6,6 +6,7 @@ signal energy_changed(value: int)
 signal inventory_changed()
 signal codex_changed(item_id: String)
 signal market_tick(tick: int)
+signal saved()   # 存档写入成功后触发，供云存档自动上传等外部系统挂钩
 
 const SAVE_PATH := "user://scrap_engine_save.json"
 const START_CREDITS := 600
@@ -18,10 +19,11 @@ var credits: int = START_CREDITS
 var energy: int = START_ENERGY
 var inventory: Dictionary = {}        # item_id -> { "n": 数量, "cs": 保养度总和 }
 var codex: Dictionary = {}            # item_id -> true 表示已发现
+var achievements: Dictionary = {}     # achievement_id -> true 表示已解锁（本地权威）
 var calibrator_level: int = 0         # 概率校准器等级
 var pity: Dictionary = {}             # "family|fromTier" -> 连续失败次数
 var stats: Dictionary = {
-	"opens": 0, "promote_attempts": 0,
+	"opens": 0, "dismantles": 0, "promote_attempts": 0,
 	"success": 0, "hold": 0, "damage": 0, "breakdown": 0,
 	"sold": 0, "bought": 0, "earned": 0, "spent": 0,
 	"repairs": 0, "refurbish": 0, "refurbish_fail": 0,
@@ -36,6 +38,7 @@ func reset_new_game() -> void:
 	energy = START_ENERGY
 	inventory.clear()
 	codex.clear()
+	achievements.clear()
 	pity.clear()
 	calibrator_level = 0
 	for k in stats.keys():
@@ -202,11 +205,12 @@ func pity_reset(family: String, from_tier: int) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": 1,
+		"version": 2,
 		"credits": credits,
 		"energy": energy,
 		"inventory": inventory,
 		"codex": codex,
+		"achievements": achievements,
 		"calibrator_level": calibrator_level,
 		"pity": pity,
 		"stats": stats,
@@ -219,6 +223,7 @@ func save_game() -> void:
 		return
 	f.store_string(JSON.stringify(to_dict(), "  "))
 	f.close()
+	saved.emit()
 
 func load_game() -> bool:
 	if not FileAccess.file_exists(SAVE_PATH):
@@ -232,6 +237,7 @@ func load_game() -> bool:
 	inventory = d.get("inventory", {})
 	_normalize_inventory()
 	codex = d.get("codex", {})
+	achievements = d.get("achievements", {})   # 旧存档（version 1）缺该字段时按空字典兼容
 	calibrator_level = int(d.get("calibrator_level", 0))
 	pity = d.get("pity", {})
 	var st: Variant = d.get("stats", {})

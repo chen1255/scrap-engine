@@ -4,7 +4,7 @@
 
 一款以「爆率」为核心的单机收集类小型游戏：在轨道坟场的黑市开盲盒、拆解残骸提纯材料、把同族同阶的 5 件材料投进熔炉赌一次晋升，最后在图鉴里补齐 42 件收集品。
 
-Godot 4.7.2 · GDScript · 零外部依赖 · 可离线单机运行
+Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon 时自动降级、离线照常可玩
 
 **中文** | [English](#english)
 
@@ -58,27 +58,31 @@ Godot 4.7.2 · GDScript · 零外部依赖 · 可离线单机运行
 
 ```
 scrap-engine/
-├── project.godot            # Godot 项目配置（自动加载、显示、渲染）
+├── project.godot            # Godot 项目配置（自动加载、Steam 开关、显示、渲染）
 ├── export_presets.cfg       # Windows 导出预设（图标 / 版本号 / 单文件打包）
+├── steam_appid.txt          # Steam App ID（默认 480 测试；发布时替换为自有 ID）
 ├── data/                    # ★ 全部数值配置，纯 JSON
 │   ├── items.json           #   42 件收集品：族系、阶次、价格、检视属性
 │   ├── rarities.json        #   阶次、族系、品相档位与开箱品相区间
 │   ├── loot_tables.json     #   黑市盲盒掉落表
 │   ├── recipes.json         #   晋升配方、道具、校准器、维修台（精修 / 翻新）
+│   ├── achievements.json    #   19 条成就定义（条件规则数据驱动）
 │   ├── traits.json          #   词条池
 │   └── market.json          #   行情波动、费率、市场事件
+├── addons/
+│   └── godotsteam/          # GodotSteam GDExtension v4.23.1（全平台二进制，可选）
 ├── scenes/
 │   └── main.tscn            # 唯一主场景
 ├── scripts/
-│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Sfx
-│   └── ui/                  # 主界面、7 个视图、全息检视面板、UI 组件库（含动效原语）
+│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Sfx / Achievements / SteamService
+│   └── ui/                  # 主界面、8 个视图、全息检视面板、UI 组件库（含动效原语）
 ├── shaders/                 # 全息卡片与全息图标着色器
 ├── assets/
 │   ├── icons/               # 43 张 512×512 透明物品图标（含「未知」占位）
 │   ├── audio/               # 17 段程序化合成的音效 WAV（由 tools/gen_sfx.gd 生成）
 │   └── branding/            # 应用图标（png + 多尺寸 ico）
-├── tests/                   # headless 概率自测
-└── tools/                   # 开发期工具：图标烘焙、音效合成、视图截图
+├── tests/                   # headless 自测：概率（sim_rates）/ Steam 集成（sim_steam）
+└── tools/                   # 开发期工具：图标烘焙、音效合成、视图截图、Steam addon 拉取
 ```
 
 ### 运行
@@ -102,6 +106,25 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.ts
 
 运行时由 `Sfx` 自动加载单例统一播放（10 路播放池、支持延迟触发与静音），HUD 右上角的「音效：开/关」按钮可随时切换。演出采用轻快利落风格：开箱逐件翻牌揭示（连开更快）、熔炉与维修台翻新抽签滚动定格（点击任意处跳过），整套演出默认 1~2 秒内完成。
 
+### Steam 集成（可选）
+
+内置 **GodotSteam GDExtension v4.23.1**（Steamworks），提供三项可选能力；**缺少 addon 或未运行 Steam 客户端时自动降级，界面显示「不可用 + 原因」，游戏照常可玩**：
+
+| 能力 | 说明 |
+|---|---|
+| 成就 | 19 条成就，定义在 `data/achievements.json`（条件规则数据驱动）；**本地存档为权威解锁状态**，Steam 侧仅做尽力同步 |
+| 云存档 | 上传 / 下载 `scrap_engine_save.json`，支持「存档后自动上传」；下载遵循「新者优先」冲突策略 |
+| 状态面板 | 侧栏「对接 Steam」页：账号 / App ID / 云配额 / 云端与本地文件信息 + 成就列表（含进度） |
+
+- **App ID**：默认读取根目录 `steam_appid.txt`（默认 `480`，即 Valve 公共测试 app *Spacewar*）。发布时替换为自有 App ID，并在 Steamworks 后台定义同名成就（`ACH_*`）即可完整生效。
+- **addon 来源**：`addons/godotsteam/`（已入库全平台二进制）。升级或补拉：
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File tools\fetch_godotsteam.ps1
+  ```
+- **导出后**：需把 `steam_appid.txt` 拷贝到 exe 同级目录（由 Steam 客户端启动的正式包不需要它）。
+
+> 说明：Spacewar(480) 未在后台定义自有成就名，`setAchievement` 在测试 app 上可能不生效——属预期；本地解锁状态才是权威，换成自有 App ID 后即完整生效。
+
 ### 数值自测
 
 验证「黑市爆率」「晋升抽签」与「翻新抽签」的实际分布是否与配置一致，并断言精修为确定性操作（4 个盲盒 × 20000 次开箱、12 组晋升 × 1500 次抽签、翻新 × 3000 次），通过时打印 `[PASS]` 并以退出码 0 结束：
@@ -110,13 +133,27 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.ts
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_rates.tscn
 ```
 
+Steam 集成自测（降级安全 / 成就规则 / 存档往返），同样以 `[PASS]` + 退出码 0 表示通过；**缺少 addon 时该自测也必须通过**：
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_steam.tscn
+```
+
 ### 打包 Windows 构建
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Windows Desktop" build\windows\ScrapEngine.exe
 ```
 
-需要先装好 4.7.2 的导出模板。产物为**单文件 exe**（资源包内嵌，`binary_format/embed_pck=true`），直接作为 Steam depot 目录内容即可。
+需要先装好 4.7.2 的导出模板。产物为**单文件 exe**（资源包内嵌，`binary_format/embed_pck=true`），直接作为 Steam depot 目录内容即可。GodotSteam GDExtension 二进制会随导出产物一并落地；若要在 Steam 客户端之外直接运行该 exe 调试，请把 `steam_appid.txt` 拷贝到 exe 同级目录。
+
+### 开发里程碑
+
+| 里程碑 | 内容 | 状态 |
+|---|---|---|
+| 阶段一 | 程序化合成音效层 + 开箱 / 晋升演出 | 完成 |
+| 阶段二 | 维修台（确定性精修 + 一次性概率翻新） | 完成 |
+| 阶段三 | Steam 对接（成就 + 云存档 + 状态面板，可优雅降级） | 完成 |
 
 开发期截图工具（需要渲染设备，不能 `--headless`）：
 
@@ -124,7 +161,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 Godot_v4.7.2-stable_win64.exe --path . res://tools/shot.tscn -- --view=inventory --seed
 ```
 
-`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex`，`--inspect=<item_id>` 可直接打开全息检视面板。
+`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / steam`，`--inspect=<item_id>` 可直接打开全息检视面板。
 
 ### 许可
 
@@ -136,7 +173,7 @@ MIT License，见 [LICENSE](LICENSE)。
 
 **Scrap Engine** is a small, single-player collection game built around drop-rate gambling. Open unidentified crates at the orbital graveyard black market, disassemble wrecks into materials, feed five same-family same-tier materials into the furnace for a single probability-driven promotion roll, and complete all 42 collectibles in the codex.
 
-Built with Godot 4.7.2 / GDScript. No external dependencies, runs fully offline.
+Built with Godot 4.7.2 / GDScript, with optional built-in Steam integration — it degrades gracefully and runs fully offline when Steam or the addon is absent.
 
 ### Core loop
 

@@ -10,6 +10,7 @@ const PromotionViewR := preload("res://scripts/ui/view_promotion.gd")
 const RepairViewR := preload("res://scripts/ui/view_repair.gd")
 const ExchangeViewR := preload("res://scripts/ui/view_exchange.gd")
 const CodexViewR := preload("res://scripts/ui/view_codex.gd")
+const SteamViewR := preload("res://scripts/ui/view_steam.gd")
 
 var _views: Dictionary = {}
 var _nav_btns: Dictionary = {}
@@ -155,6 +156,7 @@ func _build_nav() -> Control:
 		["repair", "维修台", "阶段四 · 品相精修"],
 		["exchange", "交易所", "单机模拟行情"],
 		["codex", "图鉴", "收集与检视"],
+		["steam", "对接 Steam", "成就 · 云存档"],
 	]
 	var p := UIKitR.panel(UIKitR.PANEL, 12, UIKitR.LINE)
 	p.custom_minimum_size.x = 196
@@ -188,6 +190,7 @@ func _create_views() -> void:
 		["repair", RepairViewR],
 		["exchange", ExchangeViewR],
 		["codex", CodexViewR],
+		["steam", SteamViewR],
 	]
 	for d in defs:
 		var v: Control = (d[1] as GDScript).new()
