@@ -10,8 +10,10 @@ const PromotionViewR := preload("res://scripts/ui/view_promotion.gd")
 const RepairViewR := preload("res://scripts/ui/view_repair.gd")
 const ExchangeViewR := preload("res://scripts/ui/view_exchange.gd")
 const CodexViewR := preload("res://scripts/ui/view_codex.gd")
+const GoalsViewR := preload("res://scripts/ui/view_goals.gd")
 const SteamViewR := preload("res://scripts/ui/view_steam.gd")
 const SettingsViewR := preload("res://scripts/ui/view_settings.gd")
+const OnboardingOverlayR := preload("res://scripts/ui/onboarding_overlay.gd")
 
 var _views: Dictionary = {}
 var _nav_btns: Dictionary = {}
@@ -30,6 +32,7 @@ var _wire_btn: Button
 var _toast_wrap: Control
 var _toast_label: Label
 var _toast_timer: Timer
+var _onboarding: Control
 var _rebuilding := false
 
 func _ready() -> void:
@@ -38,6 +41,7 @@ func _ready() -> void:
 	_refresh_hud()
 	switch_view("market")
 	show_toast("欢迎来到轨道黑市。先开一箱，再去拆解台提纯。")
+	Onboarding.start_if_needed()
 
 ## 构建整棵界面树（重建界面时复用同一套流程，保证两条路径完全一致）。
 func _build_all() -> void:
@@ -47,6 +51,8 @@ func _build_all() -> void:
 	_build_shell()
 	_build_inspect_layer()
 	_build_toast()
+	_build_onboarding()
+	_refresh_goals_badge()
 
 func _connect_systems() -> void:
 	GameState.inventory_changed.connect(_on_inventory_changed)
@@ -55,6 +61,10 @@ func _connect_systems() -> void:
 	GameState.codex_changed.connect(_on_codex_changed)
 	GameState.market_tick.connect(_on_market_tick)
 	MarketSystem.prices_changed.connect(_on_prices_changed)
+	Objectives.goal_completed.connect(_on_goal_completed)
+	Objectives.goals_changed.connect(_refresh_goals_badge)
+	Onboarding.step_changed.connect(_on_onboarding_step)
+	Onboarding.finished.connect(_on_onboarding_finished)
 
 func _disconnect_systems() -> void:
 	GameState.inventory_changed.disconnect(_on_inventory_changed)
@@ -63,6 +73,10 @@ func _disconnect_systems() -> void:
 	GameState.codex_changed.disconnect(_on_codex_changed)
 	GameState.market_tick.disconnect(_on_market_tick)
 	MarketSystem.prices_changed.disconnect(_on_prices_changed)
+	Objectives.goal_completed.disconnect(_on_goal_completed)
+	Objectives.goals_changed.disconnect(_refresh_goals_badge)
+	Onboarding.step_changed.disconnect(_on_onboarding_step)
+	Onboarding.finished.disconnect(_on_onboarding_finished)
 
 ## 字号 / 配色变更后必须重建整棵界面树：绝大多数字号是逐控件的 theme override，
 ## 只有重建才能让新设置真正作用到每一个标签上。延迟一帧执行，避免在触发者自己的信号回调里自毁。
@@ -190,6 +204,7 @@ func _build_nav() -> Control:
 		["repair", "维修台", "阶段四 · 品相精修"],
 		["exchange", "交易所", "单机模拟行情"],
 		["codex", "图鉴", "收集与检视"],
+		["goals", "目标", "作业清单 · 奖励"],
 		["steam", "对接 Steam", "成就 · 云存档"],
 		["settings", "设置", "音频 · 画面 · 存档槽"],
 	]
@@ -225,6 +240,7 @@ func _create_views() -> void:
 		["repair", RepairViewR],
 		["exchange", ExchangeViewR],
 		["codex", CodexViewR],
+		["goals", GoalsViewR],
 		["steam", SteamViewR],
 		["settings", SettingsViewR],
 	]
@@ -249,12 +265,7 @@ func switch_view(id: String) -> void:
 	for k in _views:
 		(_views[k] as Control).visible = (k == id)
 	_current = id
-	for k in _nav_btns:
-		var b: Button = _nav_btns[k]
-		b.add_theme_color_override("font_color", UIKitR.ACCENT if k == id else UIKitR.TEXT)
-		var sb := UIKitR.sb(UIKitR.PANEL_HI if k == id else Color(0, 0, 0, 0), 8,
-			UIKitR.LINE_HI if k == id else Color(0, 0, 0, 0))
-		b.add_theme_stylebox_override("normal", sb)
+	_style_nav(id)
 	if _views.has(id):
 		var v: Control = _views[id] as Control
 		if v.has_method("refresh"):
@@ -263,6 +274,34 @@ func switch_view(id: String) -> void:
 		UIKitR.fade_in(v, 0.18)
 	# BGM 跟随视图切换（无音频资源 / 关闭 BGM 时安全降级）
 	Bgm.play_view(id)
+
+## 导航项配色：当前项高亮；引导进行中时把目标视图的导航项再额外标记（引导玩家的视线）。
+func _style_nav(id: String) -> void:
+	for k in _nav_btns:
+		var b: Button = _nav_btns[k]
+		b.add_theme_color_override("font_color", UIKitR.ACCENT if k == id else UIKitR.TEXT)
+		var sb := UIKitR.sb(UIKitR.PANEL_HI if k == id else Color(0, 0, 0, 0), 8,
+			UIKitR.LINE_HI if k == id else Color(0, 0, 0, 0))
+		b.add_theme_stylebox_override("normal", sb)
+	if Onboarding.is_active():
+		_apply_nav_highlight(str(Onboarding.current().get("view", "")))
+
+func _apply_nav_highlight(id: String) -> void:
+	if id == "" or not _nav_btns.has(id):
+		return
+	var b: Button = _nav_btns[id]
+	b.add_theme_color_override("font_color", UIKitR.ACCENT2)
+	b.add_theme_stylebox_override("normal", UIKitR.sb(UIKitR.PANEL_HI, 8, UIKitR.ACCENT2))
+
+## 「目标」导航项：有奖励可领取时打标（● n）。
+func _refresh_goals_badge() -> void:
+	if not _nav_btns.has("goals"):
+		return
+	var n := Objectives.claimable_count()
+	var b: Button = _nav_btns["goals"]
+	b.text = "目标\n作业清单 · 奖励" + ("   ● %d" % n if n > 0 else "")
+	if n > 0:
+		b.add_theme_color_override("font_color", UIKitR.OK)
 
 func _refresh_views() -> void:
 	for k in _views:
@@ -531,3 +570,33 @@ func show_toast(msg: String) -> void:
 	_toast_wrap.visible = true
 	_toast_timer.start()
 	UIKitR.fade_in(_toast_wrap, 0.14)
+
+# ---------------- 新手引导浮层 ----------------
+
+func _build_onboarding() -> void:
+	_onboarding = OnboardingOverlayR.new()
+	add_child(_onboarding)
+	_onboarding.advance_requested.connect(func(): Onboarding.next())
+	_onboarding.skip_requested.connect(func(): Onboarding.skip())
+	Onboarding.attach(_onboarding)
+	# 界面重建（改字号 / 配色）后若引导仍在进行，把当前步重新贴回浮层
+	if Onboarding.is_active() and _onboarding.has_method("show_step"):
+		_onboarding.show_step(Onboarding.index, Onboarding.step_count(), Onboarding.current())
+
+func _on_onboarding_step(index: int, step: Dictionary) -> void:
+	if _onboarding != null and _onboarding.has_method("show_step"):
+		_onboarding.show_step(index, Onboarding.step_count(), step)
+	# 引导到位：自动切到该步对应的视图（switch_view 同时负责导航项高亮）
+	switch_view(str(step.get("view", "market")))
+
+func _on_onboarding_finished() -> void:
+	if _onboarding != null and _onboarding.has_method("hide_overlay"):
+		_onboarding.hide_overlay()
+	_style_nav(_current)
+	show_toast("引导结束 —— 之后的下一步都在「目标」页。")
+
+# ---------------- 目标 ----------------
+
+func _on_goal_completed(_id: String, def: Dictionary) -> void:
+	Sfx.play("trade")
+	show_toast("目标达成：%s —— 到「目标」页领取奖励" % str(def.get("name", "")))

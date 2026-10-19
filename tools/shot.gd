@@ -12,6 +12,7 @@ func _ready() -> void:
 	var seed_all := false
 	var inspect := ""
 	var variant := ""
+	var show_onboarding := false
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--view="):
 			view = a.substr(7)
@@ -19,6 +20,9 @@ func _ready() -> void:
 			inspect = a.substr(10)
 		elif a == "--seed":
 			seed_all = true
+		elif a == "--onboarding":
+			# 强制展示新手引导浮层（默认抑制，避免挡住目标页 / 各视图的截图核对）
+			show_onboarding = true
 		elif a == "--colorblind":
 			# 直接改内存态，避开 Settings 的自动落盘，免得开发期截图污染用户配置
 			Settings.colorblind = true
@@ -27,6 +31,11 @@ func _ready() -> void:
 			Settings.font_scale = float(a.substr(13))
 			variant += "_fs" + a.substr(13)
 	Settings.apply_ui()
+
+	# 引导浮层：截图工具默认抑制；--onboarding 时强制从第一步开始（内存态，不写档）
+	Onboarding.suppressed = not show_onboarding
+	if show_onboarding:
+		GameState.tutorial = { "done": false, "step": 0 }
 
 	if seed_all:
 		for id in GameData.item_order:

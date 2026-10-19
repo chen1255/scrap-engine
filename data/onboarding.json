@@ -1,0 +1,39 @@
+{
+	"steps": [
+		{
+			"id": "open",
+			"view": "market",
+			"title": "第一步 · 开个盲盒",
+			"text": "在左侧「黑市」里挑一个盲盒开箱。出货会写入图鉴，没见过的物品先显示为未知占位。",
+			"advance": { "type": "stat", "key": "opens", "at_least": 1 }
+		},
+		{
+			"id": "disassemble",
+			"view": "disassembly",
+			"title": "第二步 · 拆解提纯",
+			"text": "把残骸送进「拆解台」，拆成同族更低阶的材料。拆出来的材料会继承残骸的品相。",
+			"advance": { "type": "stat", "key": "dismantles", "at_least": 1 }
+		},
+		{
+			"id": "promote",
+			"view": "promotion",
+			"title": "第三步 · 概率晋升",
+			"text": "集齐 5 个同族同阶材料，投进「熔炉」抽一次签：成功 / 稳定 / 损伤 / 崩解。连续失败会触发保底。",
+			"advance": { "type": "stat", "key": "promote_attempts", "at_least": 1 }
+		},
+		{
+			"id": "sell",
+			"view": "exchange",
+			"title": "第四步 · 变现",
+			"text": "把多余的材料或残骸拿到「交易所」卖出换信用点。行情随周期波动，留意市场事件。",
+			"advance": { "type": "stat", "key": "sold", "at_least": 1 }
+		},
+		{
+			"id": "explore",
+			"view": "codex",
+			"title": "第五步 · 图鉴与检视",
+			"text": "「图鉴」记录你的收集进度。任意物品卡片都能点开全息检视面板，查看品相、属性与词条。",
+			"advance": null
+		}
+	]
+}

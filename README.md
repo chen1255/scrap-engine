@@ -27,6 +27,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 4. **维修台 · 品相精修 / 翻新**：品相决定卖价系数，开箱随机生成、拆解继承，却没有天然的回补手段。维修台提供两条路：**精修**（确定性，按档 +品相，费用已知）与**翻新**（一次性概率回补，抽一次签决定 `焕新 / 良修 / 徒劳`，可能白耗材料）。两者都消耗同族 T1 材料 + 信用点，于是「攒材料 → 修品相 → 卖出更高价 / 拆出更高品相的材料」的闭环成立。
 5. **交易所**：模拟市场行情，价格随波动率浮动、按周期刷新，含手续费、买入溢价、抛售冲击与恢复，以及随机市场事件。
 6. **图鉴 + 全息检视**：42 件收集品的收集进度；点开任意物品进入全息检视面板，查看保养度、检视属性与词条。
+7. **目标 + 新手引导**：14 条作业目标按规则自动判定进度（只读进度，不改动任何掉落与配方数值），达成后在「目标」页领取奖励；新档首次进入时由一张 5 步教练卡带过整条循环，可随时跳过，进度随存档保留。
 
 ### 系统一览
 
@@ -41,6 +42,8 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 音频与演出 | 17 段程序化合成的短音效 + 3 段循环 BGM + 1 段环境铺底（零外部素材），BGM 随视图自动交叉淡切；开箱逐件翻牌揭示、熔炉/翻新抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
 | 设置 | 侧栏「设置」页：主音量 / 音效音量 / BGM 音量、音效与 BGM 开关、全屏与分辨率、界面字号（4 档）、色盲友好配色；改动即时生效并落盘 `scrap_settings.cfg` |
 | 存档槽位 | 3 个独立槽位（1 号沿用旧文件名，向后兼容）；每个槽独立保存进度，可与 Steam 云存档按槽位名联动 |
+| 目标 | 侧栏「目标」页：14 条作业目标（`data/goals.json`），达成条件用 7 种规则类型描述，与成就共用同一套判定引擎；达成后手动领取奖励（信用点 / 体力 / 物品），可领取时导航项与卡片同步高亮 |
+| 新手引导 | 5 步教练卡（`data/onboarding.json`）：每步 = 一句说明 + 对应视图 + 可选的推进规则，满足规则或点「下一步」即推进，全程可「跳过引导」；进度写进存档，只对真正的新档弹一次 |
 
 ### 数据规模
 
@@ -53,6 +56,8 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 晋升配方 | 4 段（T1→T2 至 T4→T5），各带独立概率与保底参数 |
 | 维修配置 | 精修 1 档 / 翻新 3 结果（焕新 / 良修 / 徒劳），费用与材料均按同族 T1 计 |
 | 品相档位 | 5 |
+| 目标 | 14（7 类达成规则：次数 / 信用点 / 图鉴收录 / 族系收齐 / 持有阶次 / 校准器等级 / 校准器满级） |
+| 引导步骤 | 5 |
 
 所有数值均为纯数据驱动，改 JSON 即改玩法，无需碰代码。
 
@@ -69,6 +74,8 @@ scrap-engine/
 │   ├── loot_tables.json     #   黑市盲盒掉落表
 │   ├── recipes.json         #   晋升配方、道具、校准器、维修台（精修 / 翻新）
 │   ├── achievements.json    #   19 条成就定义（条件规则数据驱动）
+│   ├── goals.json           #   14 条目标定义（与成就共用同一套规则引擎）
+│   ├── onboarding.json      #   5 步新手引导：说明 + 目标视图 + 推进规则
 │   ├── traits.json          #   词条池
 │   └── market.json          #   行情波动、费率、市场事件
 ├── addons/
@@ -76,14 +83,14 @@ scrap-engine/
 ├── scenes/
 │   └── main.tscn            # 唯一主场景
 ├── scripts/
-│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Settings / Sfx / Bgm / Achievements / SteamService
-│   └── ui/                  # 主界面、9 个视图、全息检视面板、UI 组件库（含动效原语）
+│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Rules / Objectives / Onboarding / Settings / Sfx / Bgm / Achievements / SteamService
+│   └── ui/                  # 主界面、10 个视图、全息检视面板、新手引导浮层、UI 组件库（含动效原语）
 ├── shaders/                 # 全息卡片与全息图标着色器
 ├── assets/
 │   ├── icons/               # 43 张 512×512 透明物品图标（含「未知」占位）
 │   ├── audio/               # 17 段音效 + 3 段循环 BGM + 1 段环境音（由 tools/gen_sfx.gd、tools/gen_bgm.gd 生成）
 │   └── branding/            # 应用图标（png + 多尺寸 ico）
-├── tests/                   # headless 自测：概率（sim_rates）/ Steam（sim_steam）/ 设置与音频（sim_settings）
+├── tests/                   # headless 自测：概率（sim_rates）/ Steam（sim_steam）/ 设置与音频（sim_settings）/ 目标与引导（sim_goals）
 └── tools/                   # 开发期工具：图标烘焙、音效 / BGM 合成、视图截图、Steam addon 拉取
 ```
 
@@ -124,6 +131,32 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 - **色盲友好配色**：开启后把语义色（`OK` 绿 / `BAD` 红 / `WARN` 橙，以及由 JSON 数据驱动的族系色、品相色、阶次色）整体替换为 Okabe–Ito 系高区分度版本（绿→天蓝、红→朱橙、橙→正黄……），品牌主色（青 / 紫）保持不变；掉率占比条、图例、抽签标题等全部同步。
 - **存档槽位**：3 个独立槽位，可随时切换 / 重新载入 / 删除；槽 1 沿用历史文件名 `scrap_engine_save.json`（向后兼容），云存档文件名随槽位变化（如槽 2 = `scrap_engine_save_slot2.json`）。
 
+### 目标与新手引导
+
+**目标** —— 14 条作业目标从「开出第一件废料」一路铺到「收齐 42 件收集品」，全部定义在 `data/goals.json`，**只判定进度、不动数值**：任何掉落表、配方、价格与保底参数都不受影响。达成条件写成 7 种规则类型，与 Steam 成就**共用同一套规则引擎**（`Rules` 单例），所以成就与目标的判定永远不会漂移。
+
+| 规则类型 | 判定 |
+|---|---|
+| `stat` | 玩法计数（开箱 / 拆解 / 晋升尝试 / 成交 / 精修 / 翻新…）达到阈值 |
+| `credits` | 信用点达到阈值 |
+| `codex_count` | 图鉴收录件数达到阈值 |
+| `codex_family_all` | 某个族系（机械 / 生物 / 数据）全部收齐 |
+| `own_kind_tier` | 仓库里持有 N 件某阶材料（如 T3 精炼级） |
+| `calibrator_level` | 概率校准器升到指定等级 |
+| `calibrator_max` | 概率校准器满级 |
+
+达成后到「目标」页点「领取奖励」发放奖励（信用点 / 体力 / 物品），奖励总量约 ₡6100 + 5 体力 + 2 件 T1 材料；可领取时导航项显示 `● n` 计数，卡片按「可领取 / 推荐下一步 / 进行中 / 已完成」四态区分。目标与领取状态都写进存档（存档 `version` 3），换槽 / 重载 / 云存档都跟着走。
+
+**新手引导** —— 5 步教练卡，定义在 `data/onboarding.json`：每步 = 一句说明 + 要看的视图 + 可选的「推进规则」（规则类型与目标完全一致）。
+
+1. 黑市：开出第一件物品
+2. 拆解台：完成一次拆解
+3. 熔炉：完成一次晋升尝试
+4. 交易所：卖出第一件物品
+5. 图鉴：认识收集与全息检视（信息步，只能手动「下一步」）
+
+推进规则由玩法信号（开箱 / 拆解 / 晋升 / 精修 / 行情 / 图鉴 / 库存）驱动自动判定，满足即进入下一步；随时可点「下一步」手动推进，或点「跳过引导」直接结束。进度写进存档，**只对真正的新档弹一次**（重置存档不会重新弹），已结束的档不会再被打扰。浮层根节点不拦截鼠标，引导进行中也能自由操作整个界面。
+
 ### Steam 集成（可选）
 
 内置 **GodotSteam GDExtension v4.23.1**（Steamworks），提供三项可选能力；**缺少 addon 或未运行 Steam 客户端时自动降级，界面显示「不可用 + 原因」，游戏照常可玩**：
@@ -163,6 +196,12 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_steam.
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_settings.tscn
 ```
 
+目标 / 引导 / 规则引擎自测（7 类规则判定、14 条目标定义、达成与领取、存档往返、5 步引导推进与跳过）：
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_goals.tscn
+```
+
 ### 打包 Windows 构建
 
 ```powershell
@@ -179,6 +218,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 | 阶段二 | 维修台（确定性精修 + 一次性概率翻新） | 完成 |
 | 阶段三 | Steam 对接（成就 + 云存档 + 状态面板，可优雅降级） | 完成 |
 | 阶段四 | 呈现打磨：循环 BGM + 环境音、设置页（音量 / 画面 / 字号 / 色盲友好）、3 存档槽位（与云存档联动） | 完成 |
+| 阶段五 | 作业目标（14 条，判定规则与 Steam 成就共用一套引擎）+ 新手引导（5 步教练卡，可跳过、只对新档弹一次） | 完成 |
 
 开发期截图工具（需要渲染设备，不能 `--headless`）：
 
@@ -186,7 +226,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 Godot_v4.7.2-stable_win64.exe --path . res://tools/shot.tscn -- --view=inventory --seed
 ```
 
-`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / steam / settings`，`--inspect=<item_id>` 可直接打开全息检视面板；另有 `--colorblind`（色盲配色）与 `--font-scale=<x>`（字号缩放）用于核对设置效果。
+`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / goals / steam / settings`，`--inspect=<item_id>` 可直接打开全息检视面板；另有 `--colorblind`（色盲配色）、`--font-scale=<x>`（字号缩放）与 `--onboarding`（强制展示新手引导浮层）用于核对设置与引导效果。
 
 ### 许可
 
@@ -215,6 +255,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 4. **Repair bench · precision & refurbish** — Condition scales sell price but is only rolled on unboxing and inherited on disassembly — with no natural way to restore it. The repair bench offers two routes: **precision repairs** (deterministic, +10 condition per grade at a known cost) and **refurbishing** (a one-shot probability restore: one draw for `renew / mend / futile`, which may waste materials). Both consume same-family T1 materials plus credits, closing the loop of *hoard materials → restore condition → sell for more / disassemble into higher-condition materials*.
 5. **Exchange** — A simulated player market: volatile prices with periodic refresh, sell fees, buy markup, dump impact and recovery, plus random market events.
 6. **Codex + holographic inspection** — Track collection progress across 42 items and open any item to inspect its condition, stat bars, and traits.
+7. **Goals + onboarding** — 14 objectives progress automatically from rule checks (read-only: no drop table, recipe, or price value is touched) and pay out on the "Goals" view; a genuinely new save is walked through the whole loop by a 5-step coach card that can be skipped at any time.
 
 ### At a glance
 
@@ -229,6 +270,8 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Audio & presentation | 17 procedurally synthesized sound effects + 3 seamless-loop BGM tracks + 1 ambient bed (no external assets), with BGM auto-crossfading per view; card-by-card reveal, furnace/refurbish draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
 | Settings | A "Settings" view: master / SFX / BGM volume, SFX & BGM toggles, fullscreen and resolution, UI font scale (4 steps), and a colorblind-friendly palette; changes apply instantly and persist to `scrap_settings.cfg` |
 | Save slots | 3 independent slots (slot 1 keeps the legacy filename for backward compatibility); each holds its own progress and maps to a Steam cloud filename per slot |
+| Goals | A "Goals" view: 14 objectives (`data/goals.json`) described by 7 rule types, sharing **one rules engine with the Steam achievements**; rewards (credits / energy / items) are claimed manually, and the nav item flags what is claimable |
+| Onboarding | A 5-step coach card (`data/onboarding.json`): each step is a line of text + a target view + an optional advance rule, advanced either by the rule or by "Next", and skippable at any point; progress is saved and only ever shown to a genuinely new save |
 
 | Content | Count |
 |---|---|
@@ -239,6 +282,8 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Promotion recipes | 4 (T1→T2 … T4→T5), each with its own odds and pity parameters |
 | Repair config | 1 precision grade step / 3 refurbish outcomes (renew / mend / futile); costs in same-family T1 materials |
 | Condition grades | 5 |
+| Goals | 14 (7 rule types: counters / credits / codex count / family complete / own tier / calibrator level / calibrator maxed) |
+| Onboarding steps | 5 |
 
 Everything is data-driven: change the JSON, change the game — no code edits needed.
 
@@ -276,6 +321,32 @@ The "Settings" view centralizes: master / SFX / BGM volume sliders, SFX & BGM to
 - **Colorblind-friendly palette** — When enabled, semantic colors (`OK` green / `BAD` red / `WARN` amber, plus the JSON-driven family, condition, and tier colors) are swapped for high-contrast Okabe–Ito variants (green→sky blue, red→vermillion, amber→yellow, …), while brand colors (cyan / violet) stay put; odds bars, legends, and draw titles all follow.
 - **Save slots** — 3 independent slots that can be switched / reloaded / deleted at any time; slot 1 keeps the legacy filename `scrap_engine_save.json` (backward compatible), and the cloud filename follows the slot (e.g. slot 2 = `scrap_engine_save_slot2.json`).
 
+### Goals & onboarding
+
+**Goals** — 14 objectives, from "open your first piece of scrap" all the way to "collect all 42 item types", live in `data/goals.json`. They are **progress-only and never touch a value**: no drop table, recipe, price, or pity parameter is affected. Each objective is one of 7 rule types, evaluated by the same `Rules` singleton that drives the Steam achievements, so the two can never drift apart:
+
+| Rule type | Check |
+|---|---|
+| `stat` | A gameplay counter (opens / dismantles / promotion attempts / sales / repairs / refurbishes …) reaching a threshold |
+| `credits` | Credits reaching a threshold |
+| `codex_count` | Number of collected item types |
+| `codex_family_all` | A whole family (mech / bio / data) collected |
+| `own_kind_tier` | Holding N materials of a given tier (e.g. T3 refined) |
+| `calibrator_level` | Probability calibrator at a given level |
+| `calibrator_max` | Probability calibrator maxed out |
+
+Completed objectives are paid out with the "Claim" button on the Goals view (credits / energy / items — roughly ₡6100 + 5 energy + 2 T1 materials in total), and while anything is claimable the nav item carries a `● n` counter. Objective and claim state is saved (save `version` 3), so it travels with slot switching, reloads, and cloud saves.
+
+**Onboarding** — a 5-step coach card defined in `data/onboarding.json`: each step is a line of text + a view to look at + an optional advance rule (same rule types as the goals).
+
+1. Black market — open your first item
+2. Disassembly bench — disassemble once
+3. Furnace — attempt one promotion
+4. Exchange — sell your first item
+5. Codex — collection and holographic inspection (an info-only step, advanced manually)
+
+Advance rules are driven by gameplay signals (crate opens / disassembly / promotion / repair / market ticks / codex / inventory), so a step usually completes on its own; "Next" advances manually and "Skip tutorial" ends it outright. Progress is stored in the save and **only ever shown to a genuinely new save** (resetting does not bring it back). The overlay never blocks the mouse, so the whole UI stays usable while it is up.
+
 ### Drop-rate self-test
 
 Verifies that the actual distributions match the configured rates for the black-market drops, the promotion draws, and the refurbish draws, and asserts that precision repairs are deterministic (4 crates × 20,000 opens, 12 promotion groups × 1,500 draws, refurbish × 3,000). Prints `[PASS]` and exits with code 0 on success:
@@ -294,6 +365,12 @@ Settings & audio self-test (audio buses / BGM loop & view mapping / settings per
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_settings.tscn
+```
+
+Goals / onboarding / rules self-test (the 7 rule types, the 14 objective definitions, completion and claiming, save round-trip, and the 5-step onboarding advance & skip):
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_goals.tscn
 ```
 
 ### Building for Windows

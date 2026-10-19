@@ -22,6 +22,8 @@ var energy: int = START_ENERGY
 var inventory: Dictionary = {}        # item_id -> { "n": 数量, "cs": 保养度总和 }
 var codex: Dictionary = {}            # item_id -> true 表示已发现
 var achievements: Dictionary = {}     # achievement_id -> true 表示已解锁（本地权威）
+var goals: Dictionary = {}            # goal_id -> { "done": true, "claimed": true }
+var tutorial: Dictionary = { "done": false, "step": 0 }   # 新手引导：是否已完成 / 当前步骤
 var calibrator_level: int = 0         # 概率校准器等级
 var pity: Dictionary = {}             # "family|fromTier" -> 连续失败次数
 var save_slot: int = 1                # 当前存档槽位（1~3）
@@ -42,6 +44,8 @@ func reset_new_game() -> void:
 	inventory.clear()
 	codex.clear()
 	achievements.clear()
+	goals.clear()
+	# 注意：tutorial 不在此清除 —— 引导只对「真正的新档」弹一次，重置存档不重复打扰。
 	pity.clear()
 	calibrator_level = 0
 	for k in stats.keys():
@@ -283,12 +287,14 @@ func delete_slot(n: int) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": 2,
+		"version": 3,
 		"credits": credits,
 		"energy": energy,
 		"inventory": inventory,
 		"codex": codex,
 		"achievements": achievements,
+		"goals": goals,
+		"tutorial": tutorial,
 		"calibrator_level": calibrator_level,
 		"pity": pity,
 		"stats": stats,
@@ -317,6 +323,9 @@ func load_game() -> bool:
 	_normalize_inventory()
 	codex = d.get("codex", {})
 	achievements = d.get("achievements", {})   # 旧存档（version 1）缺该字段时按空字典兼容
+	goals = d.get("goals", {})                 # 旧存档缺 goals / tutorial 时按空值兼容
+	var tut: Variant = d.get("tutorial", {})
+	tutorial = tut if typeof(tut) == TYPE_DICTIONARY else { "done": false, "step": 0 }
 	calibrator_level = int(d.get("calibrator_level", 0))
 	pity = d.get("pity", {})
 	var st: Variant = d.get("stats", {})

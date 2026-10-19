@@ -1,0 +1,102 @@
+{
+	"goals": [
+		{
+			"id": "g_open_first",
+			"name": "第一桶废料",
+			"desc": "在轨道黑市开出第一个未鉴定盲盒。",
+			"rule": { "type": "stat", "key": "opens", "at_least": 1 },
+			"reward": { "credits": 120 }
+		},
+		{
+			"id": "g_dismantle_first",
+			"name": "提纯第一步",
+			"desc": "把一件残骸送进拆解台，提纯成材料。",
+			"rule": { "type": "stat", "key": "dismantles", "at_least": 1 },
+			"reward": { "credits": 80, "items": [ { "id": "mat_mech_t1_wire", "n": 2 } ] }
+		},
+		{
+			"id": "g_promote_first",
+			"name": "点燃熔炉",
+			"desc": "在熔炉完成第一次概率晋升尝试。",
+			"rule": { "type": "stat", "key": "promote_attempts", "at_least": 1 },
+			"reward": { "credits": 150 }
+		},
+		{
+			"id": "g_promote_success",
+			"name": "晋升成功",
+			"desc": "第一次把材料晋升到更高阶位。",
+			"rule": { "type": "stat", "key": "success", "at_least": 1 },
+			"reward": { "credits": 250, "energy": 2 }
+		},
+		{
+			"id": "g_sell_first",
+			"name": "第一桶金",
+			"desc": "在交易所卖出第一件物品。",
+			"rule": { "type": "stat", "key": "sold", "at_least": 1 },
+			"reward": { "credits": 200 }
+		},
+		{
+			"id": "g_codex_10",
+			"name": "档案起步",
+			"desc": "图鉴收录 10 件收集品。",
+			"rule": { "type": "codex_count", "found": 10 },
+			"reward": { "credits": 300 }
+		},
+		{
+			"id": "g_repair_first",
+			"name": "妙手回春",
+			"desc": "在维修台首次精修一件物品。",
+			"rule": { "type": "stat", "key": "repairs", "at_least": 1 },
+			"reward": { "credits": 180 }
+		},
+		{
+			"id": "g_refurbish_first",
+			"name": "翻新试试",
+			"desc": "首次尝试一次性概率翻新。",
+			"rule": { "type": "stat", "key": "refurbish", "at_least": 1 },
+			"reward": { "credits": 120 }
+		},
+		{
+			"id": "g_credits_5k",
+			"name": "小有积蓄",
+			"desc": "信用点余额达到 5000。",
+			"rule": { "type": "credits", "at_least": 5000 },
+			"reward": { "credits": 400 }
+		},
+		{
+			"id": "g_t3_material",
+			"name": "精炼工艺",
+			"desc": "拥有任意一件 T3 精炼级材料。",
+			"rule": { "type": "own_kind_tier", "kind": "material", "tier": 3, "count": 1 },
+			"reward": { "credits": 350 }
+		},
+		{
+			"id": "g_calibrator_1",
+			"name": "校准初阶",
+			"desc": "把概率校准器升到至少 1 级。",
+			"rule": { "type": "calibrator_level", "level": 1 },
+			"reward": { "credits": 300 }
+		},
+		{
+			"id": "g_codex_half",
+			"name": "半壁江山",
+			"desc": "图鉴收录半数（21 件）。",
+			"rule": { "type": "codex_count", "found": 21 },
+			"reward": { "credits": 600 }
+		},
+		{
+			"id": "g_own_t5",
+			"name": "触碰原型",
+			"desc": "拥有任意一件 T5 原型级材料。",
+			"rule": { "type": "own_kind_tier", "kind": "material", "tier": 5, "count": 1 },
+			"reward": { "credits": 800 }
+		},
+		{
+			"id": "g_codex_all",
+			"name": "全息收藏家",
+			"desc": "图鉴收录全部 42 件收集品。",
+			"rule": { "type": "codex_count", "found": 42 },
+			"reward": { "credits": 2000, "energy": 3 }
+		}
+	]
+}

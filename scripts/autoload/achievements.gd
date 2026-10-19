@@ -60,29 +60,9 @@ func _unlock(id: String, def: Dictionary) -> void:
 	GameState.save_game()
 	achievement_unlocked.emit(id, def)
 
+## 达成判定统一交给共享规则引擎 Rules（与 Objectives 共用同一套语义）。
 func _meets(def: Dictionary) -> bool:
-	var rule: Dictionary = def.get("rule", {})
-	match str(rule.get("type", "")):
-		"stat":
-			return int(GameState.stats.get(str(rule.get("key", "")), 0)) >= int(rule.get("at_least", 1))
-		"credits":
-			return GameState.credits >= int(rule.get("at_least", 0))
-		"codex_count":
-			return int(GameState.codex_progress()[0]) >= int(rule.get("found", 0))
-		"codex_family_all":
-			var fp: Array = GameState.codex_progress_of(str(rule.get("family", "")))
-			return int(fp[1]) > 0 and int(fp[0]) >= int(fp[1])
-		"own_kind_tier":
-			return _count_kind_tier(str(rule.get("kind", "")), int(rule.get("tier", 0))) >= int(rule.get("count", 1))
-		"calibrator_max":
-			return CraftSystem.calibrator_maxed()
-	return false
-
-func _count_kind_tier(kind: String, tier: int) -> int:
-	var n := 0
-	for id in GameData.items_matching({ "kind": kind, "tier": tier }):
-		n += GameState.count_of(id)
-	return n
+	return Rules.meets(def.get("rule", {}))
 
 # ---------------- 查询接口（供 UI / 测试） ----------------
 
@@ -111,23 +91,4 @@ func steam_name_of(id: String) -> String:
 
 ## 单条成就的当前进度：[当前值, 目标值]，供 UI 进度条显示。
 func progress_of(id: String) -> Array:
-	var rule: Dictionary = def_of(id).get("rule", {})
-	match str(rule.get("type", "")):
-		"stat":
-			var t := int(rule.get("at_least", 1))
-			return [mini(int(GameState.stats.get(str(rule.get("key", "")), 0)), t), t]
-		"credits":
-			var t2 := int(rule.get("at_least", 0))
-			return [mini(GameState.credits, t2), t2]
-		"codex_count":
-			return [int(GameState.codex_progress()[0]), int(rule.get("found", 0))]
-		"codex_family_all":
-			var fp: Array = GameState.codex_progress_of(str(rule.get("family", "")))
-			return [int(fp[0]), int(fp[1])]
-		"own_kind_tier":
-			var c := int(rule.get("count", 1))
-			return [mini(_count_kind_tier(str(rule.get("kind", "")), int(rule.get("tier", 0))), c), c]
-		"calibrator_max":
-			var mx := int(GameData.calibrator.get("max_level", 5))
-			return [mini(GameState.calibrator_level, mx), mx]
-	return [0, 0]
+	return Rules.progress(def_of(id).get("rule", {}))
