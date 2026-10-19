@@ -169,6 +169,10 @@ func _repair_panel() -> Control:
 	v.add_child(UIKit.label("同族 T1 材料持有 ×%d" % int(full["materials_have"]), 12, UIKit.MUTED))
 
 	if maxs > 0:
+		var tbon := float(one.get("trait_repair", 0.0))
+		if tbon != 0.0:
+			v.add_child(UIKit.label("词条加成：该物品精修额外 %s%d 品相"
+				% ["+" if tbon > 0.0 else "-", int(round(absf(tbon)))], 12, UIKit.OK if tbon > 0.0 else UIKit.BAD))
 		var row := UIKit.hbox(10)
 		var b1 := UIKit.btn("精修 ×1", true, 110)
 		b1.disabled = int(one["materials_have"]) < int(one["materials_need"]) or GameState.credits < int(one["credits"])
@@ -222,6 +226,11 @@ func _refurbish_panel() -> Control:
 	v.add_child(UIKit.label("费用 ₡%d + 同族 T1 材料 ×%d（无论成败都消耗）"
 		% [int(cost["credits"]), int(cost["materials_need"])], 12, UIKit.TEXT))
 	v.add_child(UIKit.label("同族 T1 材料持有 ×%d" % int(cost["materials_have"]), 12, UIKit.MUTED))
+
+	var trb := float(preview.get("trait_refurbish", 0.0))
+	if trb != 0.0:
+		v.add_child(UIKit.label("词条加成：「焕新」权重 %s%d（与「徒劳」之间转移）"
+			% ["+" if trb > 0.0 else "-", int(round(absf(trb)))], 12, UIKit.OK if trb > 0.0 else UIKit.BAD))
 
 	var total := 0.0
 	for k in weights:

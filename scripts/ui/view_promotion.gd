@@ -138,7 +138,7 @@ func _odds_panel() -> Control:
 	var m := _margin(p, 12)
 	var v := UIKit.vbox(8)
 	m.add_child(v)
-	v.add_child(UIKit.label("③ 本次抽签表（受校准器 / 消耗品 / 核心催化 / 保底影响）", 13, UIKit.MUTED))
+	v.add_child(UIKit.label("③ 本次抽签表（受材料词条 / 校准器 / 消耗品 / 核心催化 / 保底影响）", 13, UIKit.MUTED))
 
 	var weights: Dictionary = CraftSystem.preview_odds(_family, _from_tier, _opts())
 	var total := 0.0
@@ -164,6 +164,14 @@ func _odds_panel() -> Control:
 		item.add_child(l2)
 		legend.add_child(item)
 	v.add_child(legend)
+
+	# 材料词条（阶段七）：本次 5 件材料的词条对「成功」权重的相对乘数
+	var tmult := CraftSystem.promote_trait_mult(_family, _from_tier, [])
+	if absf(tmult - 1.0) > 0.0005:
+		v.add_child(UIKit.label("材料词条：本次材料的词条使「成功」权重 ×%.2f（%s）"
+			% [tmult, "更易成功" if tmult > 1.0 else "更难成功"], 11, UIKit.OK if tmult > 1.0 else UIKit.BAD))
+	else:
+		v.add_child(UIKit.label("材料词条：本次材料无晋升加成（「成功」权重 ×1.00）", 11, UIKit.MUTED))
 
 	var fails := GameState.pity_count(_family, _from_tier)
 	var step := GameData.promotion_step(_from_tier)

@@ -18,6 +18,7 @@ var outcomes: Dictionary = {}         # 晋升结果的文案与配色
 var repair_cfg: Dictionary = {}       # 维修台：精修参数与翻新抽签
 var market_cfg: Dictionary = {}       # 交易所配置
 var trait_pools: Dictionary = {}      # family id -> Array[词条]
+var trait_effects: Dictionary = {}    # 词条名 -> 玩法效果（promote / repair / refurbish / disassemble / sell）
 var conditions: Array = []            # 保养度（品相）分档，按 min 从高到低
 var cond_roll: Dictionary = {}        # 开箱保养度取值范围
 var family_ordinal: Dictionary = {}   # item id -> 该物品在本族系中的序号（用于确定性抽词条）
@@ -47,6 +48,9 @@ func _load_all() -> void:
 
 	var tr: Dictionary = _read_json("res://data/traits.json")
 	trait_pools = tr.get("pools", {})
+
+	# 词条 → 玩法效果映射（阶段七新增，独立文件，traits.json 不改）
+	trait_effects = _read_json("res://data/trait_effects.json").get("effects", {})
 
 	var lt: Dictionary = _read_json("res://data/loot_tables.json")
 	crates = lt.get("crates", [])
@@ -170,6 +174,59 @@ func item_traits(id: String) -> Array:
 			out.append(pool[idx])
 		k += 1
 	return out
+
+## 单条词条的玩法效果（无该词条或未定义时返回空字典，即「无效果」）
+func trait_effect(name: String) -> Dictionary:
+	return trait_effects.get(name, {})
+
+## 物品全部词条的效果聚合：
+##   promote / repair / refurbish / sell 求浮点和，disassemble 求整型和。
+## 因为物品词条是「类型级」确定性的，同一件物品永远得到同一组效果，可用于精确断言。
+func item_trait_effects(id: String) -> Dictionary:
+	var out: Dictionary = { "promote": 0.0, "repair": 0.0, "refurbish": 0.0, "sell": 0.0, "disassemble": 0 }
+	for t in item_traits(id):
+		var e: Dictionary = trait_effect(str(t.get("name", "")))
+		for k in ["promote", "repair", "refurbish", "sell"]:
+			if e.has(k):
+				out[k] = float(out[k]) + float(e[k])
+		if e.has("disassemble"):
+			out["disassemble"] = int(out["disassemble"]) + int(e["disassemble"])
+	return out
+
+## 词条效果的中文文案（供检视面板标注）。无效果时返回空串。
+func trait_effect_text(name: String) -> String:
+	var e: Dictionary = trait_effect(name)
+	if e.is_empty():
+		return ""
+	var parts := PackedStringArray()
+	var p := float(e.get("promote", 0.0))
+	if p != 0.0:
+		parts.append("晋升成功权重 %s%d%%" % [_sign(p), int(round(absf(p) * 100.0))])
+	var r := float(e.get("repair", 0.0))
+	if r != 0.0:
+		parts.append("精修品相 %s%d" % [_sign(r), int(round(absf(r)))])
+	var f := float(e.get("refurbish", 0.0))
+	if f != 0.0:
+		parts.append("翻新「焕新」权重 %s%d" % [_sign(f), int(round(absf(f)))])
+	var d := int(e.get("disassemble", 0))
+	if d != 0:
+		parts.append("拆解产出 %s%d/件" % [_sign(float(d)), absi(d)])
+	var s := float(e.get("sell", 0.0))
+	if s != 0.0:
+		parts.append("售出价格 %s%d%%" % [_sign(s), int(round(absf(s) * 100.0))])
+	return "、".join(parts)
+
+## 词条效果的正负号：正=1 / 负=-1 / 中性=0（供 UI 上色）
+func trait_effect_sign(name: String) -> int:
+	var e: Dictionary = trait_effect(name)
+	var score := 0.0
+	for k in ["promote", "repair", "refurbish", "sell"]:
+		score += float(e.get(k, 0.0))
+	score += float(e.get("disassemble", 0))
+	return int(signf(score))
+
+func _sign(v: float) -> String:
+	return "+" if v > 0.0 else "-"
 
 ## 保养度（0~100）落在哪一档
 ## 返回品相档位信息（含名称与配色）；配色经 UIKit.map_color 以便色盲模式生效。

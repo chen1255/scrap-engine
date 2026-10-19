@@ -197,6 +197,9 @@ func _row(id: String) -> Control:
 	meta.add_child(UIKit.chip(GameData.family_name(str(it.get("family", ""))), GameData.family_color(str(it.get("family", "")))))
 	if absf(ev_mult - 1.0) > 0.01:
 		meta.add_child(UIKit.chip("事件 ×%.2f" % ev_mult, UIKit.OK if ev_mult >= 1.0 else UIKit.BAD))
+	var tsm := MarketSystem.trait_sell_mult(id)
+	if absf(tsm - 1.0) > 0.005:
+		meta.add_child(UIKit.chip("词条卖价 ×%.2f" % tsm, UIKit.OK if tsm >= 1.0 else UIKit.BAD))
 	name_v.add_child(meta)
 	h.add_child(name_v)
 

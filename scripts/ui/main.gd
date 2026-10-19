@@ -448,23 +448,35 @@ func _rebuild_inspect_info(item_id: String, item: Dictionary) -> void:
 		for i in range(mini(dims.size(), attrs.size())):
 			_inspect_info.add_child(UIKitR.attr_bar(str(dims[i]), float(attrs[i]), fcol))
 
-	# 词条：由 GameData.item_traits 确定性抽取，同一物品永远一致
+	# 词条：由 GameData.item_traits 确定性抽取，同一物品永远一致；阶段七起每条词条还带玩法效果
 	var traits: Array = GameData.item_traits(item_id)
 	if traits.size() > 0:
 		_inspect_info.add_child(UIKitR.hsep(2))
 		_inspect_info.add_child(_section("词条"))
 		for t in traits:
+			var tname := str(t.get("name", ""))
+			var cell := UIKitR.vbox(2)
 			var row := UIKitR.hbox(8)
-			row.add_child(UIKitR.chip(str(t.get("name", "")), UIKitR.WARN, 11))
+			row.add_child(UIKitR.chip(tname, UIKitR.WARN, 11))
 			var d := UIKitR.muted(str(t.get("desc", "")), 12)
 			d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(d)
-			_inspect_info.add_child(row)
+			cell.add_child(row)
+			var etext := GameData.trait_effect_text(tname)
+			if etext != "":
+				var esign := GameData.trait_effect_sign(tname)
+				var ecol: Color = UIKitR.OK if esign > 0 else (UIKitR.BAD if esign < 0 else UIKitR.MUTED)
+				var el := UIKitR.label("效果：" + etext, 11, ecol)
+				el.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				el.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				cell.add_child(el)
+			_inspect_info.add_child(cell)
 
 	_inspect_info.add_child(UIKitR.hsep(4))
 	_inspect_info.add_child(_kv("持有数量", "×%d" % own))
 	_inspect_info.add_child(_kv("基准估价", "₡ %d" % int(item.get("base_price", 0))))
 	_inspect_info.add_child(_kv("当前市场价", "₡ %d" % MarketSystem.price_of(item_id)))
+	_inspect_info.add_child(_kv("预计卖价", "₡ %d" % MarketSystem.sell_price(item_id)))
 	_inspect_info.add_child(_kv("图鉴状态", "已收录" if GameState.is_discovered(item_id) else "未收录"))
 
 	var kind := str(item.get("kind", ""))

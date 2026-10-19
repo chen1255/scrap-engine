@@ -26,7 +26,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 3. **熔炉 · 概率晋升**：消耗 5 个同族同阶材料 + 信用点，抽一次签决定 `成功 / 稳定 / 损伤 / 崩解`；连续失败触发保底（pity），权重逐步向成功倾斜。最高可晋升到 T5。另有稳定剂与过载催化剂两种一次性道具、**核心催化**（额外投入 1 个核心，把核心写明的成功率加成真正兑现，核心随即被消耗）、以及永久性的「概率校准器」元升级。
 4. **维修台 · 品相精修 / 翻新**：品相决定卖价系数，开箱随机生成、拆解继承，却没有天然的回补手段。维修台提供两条路：**精修**（确定性，按档 +品相，费用已知）与**翻新**（一次性概率回补，抽一次签决定 `焕新 / 良修 / 徒劳`，可能白耗材料）。两者都消耗同族 T1 材料 + 信用点，于是「攒材料 → 修品相 → 卖出更高价 / 拆出更高品相的材料」的闭环成立。
 5. **交易所**：模拟市场行情，价格随波动率浮动、按周期刷新，含手续费、买入溢价、抛售冲击与恢复，以及随机市场事件。
-6. **图鉴 + 全息检视**：42 件收集品的收集进度；点开任意物品进入全息检视面板，查看保养度、检视属性与词条。
+6. **图鉴 + 全息检视**：42 件收集品的收集进度；点开任意物品进入全息检视面板，查看保养度、检视属性与词条——**词条不再只是文字**，每条词条都按自身描述语义给正 / 负数值效果（详见下方「词条玩法闭环」）。
 7. **目标 + 新手引导**：16 条作业目标按规则自动判定进度（只读进度，不改动任何掉落与配方数值），达成后在「目标」页领取奖励；新档首次进入时由一张 5 步教练卡带过整条循环，可随时跳过，进度随存档保留。
 
 ### 系统一览
@@ -37,7 +37,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 族系 | 机械 mech / 生物 bio / 数据 data，各有一套专属检视属性维度（4 维） |
 | 品相（保养度） | 0~100 分档：崭新 / 良好 / 一般 / 磨损 / 报废；影响出售价系数，开箱时随机生成，拆解继承、晋升失败退还时保留 |
 | 维修台 | 两条回补路径：精修（确定性，每档 +10 品相，费用 = 基准价 × 4% + 同族 T1 材料 ×1）与翻新（一次性概率，费用 = 基准价 × 16% + 同族 T1 材料 ×2，抽签 45% 焕新 / 35% 良修 / 20% 徒劳） |
-| 词条 | 每族系 8 条，由物品 id 确定性抽取 —— 同一件物品的词条永远一致，不同存档可复现 |
+| 词条 | 每族系 8 条，由物品 id 确定性抽取 —— 同一件物品的词条永远一致，不同存档可复现；24 条词条各自按既有描述语义给正 / 负效果（晋升成功率 / 精修品相 / 翻新权重 / 拆解产出 / 售出价格），映射表在 `data/trait_effects.json`，`traits.json` 一字不改 |
 | 检视属性 | 每件物品 4 个数值，维度名由族系决定，数值取自 `data/items.json` |
 | 核心催化 | 熔炉晋升时可额外投入 1 个核心（`items.json` 中 `kind=core`）：其档案写明的 `catalyst_bonus`（0.15）折算为 15 权重点，从「损伤 + 崩解」转入「成功」，与「过载催化剂」完全同语义；不额外收费，但核心在该次晋升中被一并消耗。不投入核心时，抽签表与既有版本逐位一致 |
 | 音频与演出 | 17 段程序化合成的短音效 + 3 段循环 BGM + 1 段环境铺底（零外部素材），BGM 随视图自动交叉淡切；开箱逐件翻牌揭示、熔炉/翻新抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
@@ -54,6 +54,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 族系 × 阶次 | 3 × 5，每族每阶 2~3 件 |
 | 黑市盲盒 | 4（未鉴定赛博废料 30c、加密数据盘 120c、军用级密封箱 450c、深渊打捞舱 1200c） |
 | 词条 | 24（3 族系 × 8 条） |
+| 词条效果 | 24（`data/trait_effects.json`：晋升成功率 / 精修品相 / 翻新权重 / 拆解产出 / 售出价格 五类修正） |
 | 晋升配方 | 4 段（T1→T2 至 T4→T5），各带独立概率与保底参数 |
 | 维修配置 | 精修 1 档 / 翻新 3 结果（焕新 / 良修 / 徒劳），费用与材料均按同族 T1 计 |
 | 核心催化 | 3 个 T4 核心可作催化剂；每次晋升最多投入 1 个（`recipes.json` 的 `catalyst` 块），加成沿用核心自带的 `catalyst_bonus` = 15 权重点 |
@@ -79,6 +80,7 @@ scrap-engine/
 │   ├── goals.json           #   16 条目标定义（与成就共用同一套规则引擎）
 │   ├── onboarding.json      #   5 步新手引导：说明 + 目标视图 + 推进规则
 │   ├── traits.json          #   词条池
+│   ├── trait_effects.json   #   词条玩法效果映射（词条名 → 晋升 / 精修 / 翻新 / 拆解 / 卖价修正）
 │   └── market.json          #   行情波动、费率、市场事件
 ├── addons/
 │   └── godotsteam/          # GodotSteam GDExtension v4.23.1（全平台二进制，可选）
@@ -169,6 +171,23 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 - **不投入即零影响** —— 抽签表只有在「真实持有该核心」时才追加这 15 点，因此**默认爆率逐位不变**，`sim_rates` 有专门的守恒与逐位一致断言兜底。
 - **配套目标** —— 新增「核心催化」（首次投入核心）与「核心储备」（同时持有 3 个核心）两条目标，目标总数 14 → 16。
 
+### 词条玩法闭环
+
+每件物品的词条由 `GameData.item_traits()` 按「族系 + 族系序号 + 阶位门槛」**确定性抽取**，所以同一件物品的词条永远一致、不同存档可复现——这也是把词条接进数值的前提（给定物品 id，效果是常量，可精确预测）。在阶段七之前，这 24 条词条（3 族系 × 8 条）只在全息检视面板里以文字出现，从未影响任何一次晋升、精修、翻新、拆解或售卖。**词条玩法闭环**按每条词条**既有描述语义**给出正 / 负修正，把它们真正接进玩法：
+
+| 效果字段 | 语义 | 消费点 |
+|---|---|---|
+| `promote` | 参与晋升时对「成功」权重的相对加成（正 = 更易成功） | 熔炉晋升 |
+| `repair` | 精修该物品时一次性额外恢复的品相点数 | 维修台精修 |
+| `refurbish` | 翻新该物品时从「徒劳」转入「焕新」的权重点 | 维修台翻新 |
+| `disassemble` | 拆解该残骸时每个产出条目的数量修正（±1 / 件） | 拆解台 |
+| `sell` | 售出该物品时的价格乘数增量（0.08 = +8%） | 交易所卖出 |
+
+- **数据驱动** —— 全部效果写在新增的 `data/trait_effects.json`（词条名 → 效果映射），`traits.json` 一字不改；改 JSON 即可全局调整词条强度。
+- **乘数而非加点** —— 晋升词条折算为「成功」权重的**相对乘数**（`1 + Σpromote`，夹在 `[0.3, 2.5]`），并在**核心催化之前**施加，因此阶段六的「精确 +15 权重点、总权重守恒」语义完全不受影响。
+- **默认逐位不变** —— 五个消费点全部写成「效果为 0 时公式恒等」（×1.0 / +0 / `clampi(x+0)`）；无词条或效果为 0 的物品，行为与既有版本逐位一致，`sim_rates` 有专门的对照断言兜底。
+- **UI 可见** —— 全息检视面板在每条词条下标注「效果：…」并按正 / 负着色；熔炉抽签表标注本次材料词条乘数；维修台标注精修 / 翻新词条加成；交易所卖价自动含词条乘数。
+
 ### Steam 集成（可选）
 
 内置 **GodotSteam GDExtension v4.23.1**（Steamworks），提供三项可选能力；**缺少 addon 或未运行 Steam 客户端时自动降级，界面显示「不可用 + 原因」，游戏照常可玩**：
@@ -190,7 +209,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 
 ### 数值自测
 
-验证「黑市爆率」「晋升抽签」与「翻新抽签」的实际分布是否与配置一致，并断言精修为确定性操作（4 个盲盒 × 20000 次开箱、12 组晋升 × 1500 次抽签、翻新 × 3000 次）；另含**核心催化**专项断言：加成折算 15 权重点、权重守恒、自「损伤 + 崩解」精确转移、未投入时抽签表逐位一致、每次恰好消耗 1 个核心。通过时打印 `[PASS]` 并以退出码 0 结束：
+验证「黑市爆率」「晋升抽签」与「翻新抽签」的实际分布是否与配置一致，并断言精修为确定性操作（4 个盲盒 × 20000 次开箱、12 组晋升 × 1500 次抽签、翻新 × 3000 次）；另含**核心催化**专项断言：加成折算 15 权重点、权重守恒、自「损伤 + 崩解」精确转移、未投入时抽签表逐位一致、每次恰好消耗 1 个核心；以及**词条玩法**专项断言：词条效果类型级可复现、晋升「成功」权重按材料词条乘数缩放（其余三项不变）、精修 / 翻新 / 拆解 / 卖价精确修正、无词条时逐位不变。通过时打印 `[PASS]` 并以退出码 0 结束：
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_rates.tscn
@@ -232,6 +251,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 | 阶段四 | 呈现打磨：循环 BGM + 环境音、设置页（音量 / 画面 / 字号 / 色盲友好）、3 存档槽位（与云存档联动） | 完成 |
 | 阶段五 | 作业目标（14 条，判定规则与 Steam 成就共用一套引擎）+ 新手引导（5 步教练卡，可跳过、只对新档弹一次） | 完成 |
 | 阶段六 | 核心催化：熔炉晋升可额外投入 1 个核心，把写明的成功率加成兑现（`catalyst_bonus` → 权重点，与过载催化剂同语义），核心随即被消耗；目标 14 → 16，默认爆率逐位不变 | 完成 |
+| 阶段七 | 词条玩法闭环：把 24 条「只在检视面板展示」的词条按既有描述语义接进玩法（晋升成功率 / 精修 / 翻新 / 拆解产出 / 售出价格 五处修正），效果映射表写在新增 `data/trait_effects.json`，`traits.json` 一字不改，无词条时逐位不变 | 完成 |
 
 开发期截图工具（需要渲染设备，不能 `--headless`）：
 
@@ -267,7 +287,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 3. **Furnace · probability promotion** — Consume 5 same-family same-tier materials plus credits for one draw: `success / hold / damage / breakdown`. Consecutive failures feed a pity system that shifts weight toward success. T5 is the ceiling. Also includes single-use items (stabilizer, overload catalyst), **core catalyst** (invest 1 extra core to cash in the success bonus its file declares — the core is consumed), and a permanent "probability calibrator" meta-upgrade.
 4. **Repair bench · precision & refurbish** — Condition scales sell price but is only rolled on unboxing and inherited on disassembly — with no natural way to restore it. The repair bench offers two routes: **precision repairs** (deterministic, +10 condition per grade at a known cost) and **refurbishing** (a one-shot probability restore: one draw for `renew / mend / futile`, which may waste materials). Both consume same-family T1 materials plus credits, closing the loop of *hoard materials → restore condition → sell for more / disassemble into higher-condition materials*.
 5. **Exchange** — A simulated player market: volatile prices with periodic refresh, sell fees, buy markup, dump impact and recovery, plus random market events.
-6. **Codex + holographic inspection** — Track collection progress across 42 items and open any item to inspect its condition, stat bars, and traits.
+6. **Codex + holographic inspection** — Track collection progress across 42 items and open any item to inspect its condition, stat bars, and traits — and **traits are no longer just text**: each one now applies a positive or negative numeric effect matching its own description (see "Trait gameplay" below).
 7. **Goals + onboarding** — 16 objectives progress automatically from rule checks (read-only: no drop table, recipe, or price value is touched) and pay out on the "Goals" view; a genuinely new save is walked through the whole loop by a 5-step coach card that can be skipped at any time.
 
 ### At a glance
@@ -278,7 +298,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Families | mech / bio / data, each with its own 4 inspection-stat dimensions |
 | Condition | 0–100 graded as pristine / good / fair / worn / scrap; scales sell price. Rolled on unboxing, inherited on disassembly, preserved when a promotion fails |
 | Repair bench | Two restore routes: precision repairs (deterministic, +10 condition per grade, cost = base price × 4% + 1 same-family T1 material) and refurbishing (one-shot probability, cost = base price × 16% + 2 same-family T1 materials, drawing 45% renew / 35% mend / 20% futile) |
-| Traits | 8 per family, deterministically derived from the item id — the same item always rolls the same traits, so saves are reproducible |
+| Traits | 8 per family, deterministically derived from the item id — the same item always rolls the same traits, so saves are reproducible; each of the 24 traits applies a positive/negative effect matching its own description (promotion odds / precision repair / refurbish weight / disassembly yield / sell price), mapped in `data/trait_effects.json` with `traits.json` untouched |
 | Inspection stats | 4 numeric values per item; dimension names come from the family, values from `data/items.json` |
 | Core catalyst | A promotion can invest 1 extra core (`kind=core` in `items.json`): its declared `catalyst_bonus` (0.15) converts to 15 weight points, moved from `damage + breakdown` into `success`, exactly like the overload catalyst; no extra fee, but the core is consumed by that promotion. With no core invested, the odds table stays bit-for-bit identical to the previous build |
 | Audio & presentation | 17 procedurally synthesized sound effects + 3 seamless-loop BGM tracks + 1 ambient bed (no external assets), with BGM auto-crossfading per view; card-by-card reveal, furnace/refurbish draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
@@ -293,6 +313,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Families × tiers | 3 × 5, with 2–3 items per family-tier |
 | Crates | 4 |
 | Traits | 24 (3 families × 8) |
+| Trait effects | 24 (`data/trait_effects.json`: promotion odds / precision repair / refurbish weight / disassembly yield / sell price) |
 | Promotion recipes | 4 (T1→T2 … T4→T5), each with its own odds and pity parameters |
 | Repair config | 1 precision grade step / 3 refurbish outcomes (renew / mend / futile); costs in same-family T1 materials |
 | Core catalyst | 3 T4 cores usable as catalysts; at most 1 per promotion (`catalyst` block in `recipes.json`), bonus comes from the core's own `catalyst_bonus` = 15 weight points |
@@ -372,9 +393,26 @@ Every T4 core (Mech Furnace / Bio Regenerator / Data Oracle) carries `catalyst_b
 - **Zero effect unless invested** — the odds table only gains those 15 points when the core is actually held, so **the default drop rates stay bit-for-bit identical**, backed by dedicated conservation and exact-match assertions in `sim_rates`.
 - **Goals** — two new objectives ("Core catalyst" for the first core invested, "Core reserve" for holding 3 cores) bring the total from 14 to 16.
 
+### Trait gameplay
+
+Each item's traits are **deterministically derived** by `GameData.item_traits()` from "family + family ordinal + tier gate", so the same item always rolls the same traits and every save is reproducible — which is what makes wiring traits into numbers safe (given an item id, the effect is a constant you can predict exactly). Before stage seven, all 24 traits (3 families × 8) appeared only as text in the holographic inspector and never influenced a single promotion, precision repair, refurbish, disassembly, or sale. **Trait gameplay** gives each trait a positive/negative modifier matching its own description and wires them into the loop:
+
+| Effect field | Meaning | Consumed at |
+|---|---|---|
+| `promote` | Relative bonus on the `success` weight when this item is a promotion material (positive = more likely to succeed) | Furnace promotion |
+| `repair` | One-off extra condition restored when precision-repairing the item | Repair bench precision |
+| `refurbish` | Weight points moved from `futile` into `renew` when refurbishing the item | Repair bench refurbish |
+| `disassemble` | Per-entry quantity modifier (±1 each) when disassembling the wreck | Disassembly bench |
+| `sell` | Sell-price multiplier increment (0.08 = +8%) | Exchange sale |
+
+- **Data-driven** — every effect lives in the new `data/trait_effects.json` (trait name → effect map); `traits.json` is untouched, so changing the JSON retunes trait strength globally.
+- **Multiplier, not additive points** — promotion traits convert to a **relative multiplier** on the `success` weight (`1 + Σpromote`, clamped to `[0.3, 2.5]`) applied **before the core catalyst**, so stage six's "exactly +15 weight points, total weight conserved" semantics stay fully intact.
+- **Bit-for-bit identical by default** — all five consumption points are written so the formula is an identity when the effect is 0 (×1.0 / +0 / `clampi(x+0)`); an item with no traits (or zero effects) behaves exactly like the previous build, backed by dedicated control assertions in `sim_rates`.
+- **Visible in the UI** — the holographic inspector annotates each trait with "Effect: …" and colors it by sign; the furnace odds table shows the material trait multiplier; the repair bench shows the repair/refurbish trait bonus; the exchange sell price automatically includes the trait multiplier.
+
 ### Drop-rate self-test
 
-Verifies that the actual distributions match the configured rates for the black-market drops, the promotion draws, and the refurbish draws, and asserts that precision repairs are deterministic (4 crates × 20,000 opens, 12 promotion groups × 1,500 draws, refurbish × 3,000). It also carries **core catalyst** assertions: the bonus converts to 15 weight points, total weight is conserved, the transfer comes precisely out of `damage + breakdown`, the odds table is bit-for-bit identical when no core is invested, and each promotion consumes exactly one core. Prints `[PASS]` and exits with code 0 on success:
+Verifies that the actual distributions match the configured rates for the black-market drops, the promotion draws, and the refurbish draws, and asserts that precision repairs are deterministic (4 crates × 20,000 opens, 12 promotion groups × 1,500 draws, refurbish × 3,000). It also carries **core catalyst** assertions: the bonus converts to 15 weight points, total weight is conserved, the transfer comes precisely out of `damage + breakdown`, the odds table is bit-for-bit identical when no core is invested, and each promotion consumes exactly one core; plus **trait gameplay** assertions: trait effects are reproducible per item type, the promotion `success` weight scales by the material trait multiplier (the other three weights unchanged), precision repair / refurbish / disassembly / sell price are adjusted exactly, and everything is bit-for-bit identical when no trait applies. Prints `[PASS]` and exits with code 0 on success:
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_rates.tscn

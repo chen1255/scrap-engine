@@ -50,7 +50,11 @@ func condition_factor(id: String) -> float:
 
 func sell_price(id: String) -> int:
 	var fee := float(GameData.market_cfg.get("sell_fee", 0.05))
-	return maxi(1, int(round(float(price_of(id)) * (1.0 - fee) * condition_factor(id))))
+	return maxi(1, int(round(float(price_of(id)) * (1.0 - fee) * condition_factor(id) * trait_sell_mult(id))))
+
+## 词条对卖价的乘数（阶段七）：1.0 = 无影响。夹在 [0.5, 2.0] 兜底，避免负词条把价格压到无效值。
+func trait_sell_mult(id: String) -> float:
+	return clampf(1.0 + float(GameData.item_trait_effects(id).get("sell", 0.0)), 0.5, 2.0)
 
 func buy_price(id: String) -> int:
 	var markup := float(GameData.market_cfg.get("buy_markup", 0.2))

@@ -16,6 +16,7 @@ func _ready() -> void:
 	_test_promotion()
 	_test_repair()
 	_test_catalyst()
+	_test_traits()
 	print("===========================================================")
 	if _fails == 0:
 		print("[PASS] 全部分布检验通过，实际抽样与配置一致。")
@@ -145,8 +146,10 @@ func _simulate_promotion(family: String, from_tier: int) -> void:
 	if pool.is_empty():
 		return
 	var mat := str(pool[0])
+	# 固定投入材料集合（5 个同款），使「期望权重」与「实际掷签」用的是同一组材料词条，避免库存漂移
+	var ids: Array = [mat, mat, mat, mat, mat]
 
-	var weights: Dictionary = CraftSystem.preview_odds(family, from_tier, {})
+	var weights: Dictionary = CraftSystem.preview_odds(family, from_tier, {}, ids)
 	var wsum := 0.0
 	for k in weights:
 		wsum += float(weights[k])
@@ -161,7 +164,7 @@ func _simulate_promotion(family: String, from_tier: int) -> void:
 		if GameState.count_of(mat) < 5:
 			GameState.add_item(mat, 20)
 		GameState.add_credits(100000)
-		var res: Dictionary = CraftSystem.promote(family, from_tier, [], {})
+		var res: Dictionary = CraftSystem.promote(family, from_tier, ids, {})
 		if not res.get("ok", false):
 			continue
 		counts[str(res["outcome"])] = int(counts.get(str(res["outcome"]), 0)) + 1
@@ -225,7 +228,7 @@ func _test_repair_deterministic() -> void:
 ## 翻新是概率的：实际结果分布必须与 recipes.json 的 draw 权重一致。
 func _test_refurbish_distribution() -> void:
 	var id := "mat_mech_t2_valve"
-	var weights: Dictionary = GameData.refurbish_weights()
+	var weights: Dictionary = CraftSystem.refurbish_preview(id)["weights"]
 	var wsum := 0.0
 	for k in weights:
 		wsum += float(weights[k])
@@ -384,3 +387,79 @@ func _check(cond: bool, msg: String) -> void:
 	else:
 		print("  [FAIL] " + msg)
 		_fails += 1
+
+# ---------------- 词条玩法（阶段七） ----------------
+
+## 断言五个消费点都被词条精确修正，且「无效果」时与既有公式逐位一致：
+##   1) 词条效果是物品类型级常量，重复调用一致；
+##   2) 晋升「成功」权重按材料词条乘数缩放，其余三项不受影响，无晋升词条时乘数 = 1.00；
+##   3) 精修品相加成精确叠加；
+##   4) 翻新「焕新 / 徒劳」权重按词条精确转移、总量守恒，无词条时逐位不变；
+##   5) 拆解产出按词条每条目整量修正，无词条时 +0；
+##   6) 卖价按词条乘数缩放。
+func _test_traits() -> void:
+	print("\n---- 阶段七：词条玩法 ----")
+	GameState.pity.clear()
+
+	# 1) 类型级常量：标准液压阀 = 钛基合金(+3% 成功 / +6% 卖价) + 轻微锈蚀(−4% 卖价)
+	var valve := "mat_mech_t2_valve"
+	var ef1: Dictionary = GameData.item_trait_effects(valve)
+	var ef2: Dictionary = GameData.item_trait_effects(valve)
+	_check(_w_eq(ef1, ef2), "%s 词条效果可复现（类型级常量）" % valve)
+	_check(absf(float(ef1["promote"]) - 0.03) < 1e-6, "%s 晋升加成 = +0.03（实际 %.2f）" % [valve, float(ef1["promote"])])
+	_check(absf(float(ef1["sell"]) - 0.02) < 1e-6, "%s 卖价加成 = +0.02（实际 %.2f）" % [valve, float(ef1["sell"])])
+
+	# 2) 晋升：成功权重 ×1.15，其余三项不变
+	var ids: Array = [valve, valve, valve, valve, valve]
+	var mult := CraftSystem.promote_trait_mult("mech", 2, ids)
+	var w: Dictionary = CraftSystem.preview_odds("mech", 2, {}, ids)
+	_check(absf(mult - 1.15) < 1e-6, "机械 T2 五件材料的词条乘数 = 1.15（实际 %.3f）" % mult)
+	_check(absf(float(w["success"]) - 55.0 * mult) < 1e-6, "成功权重 %.2f = 55 × %.2f" % [float(w["success"]), mult])
+	_check(absf(float(w["hold"]) - 25.0) < 1e-6 and absf(float(w["damage"]) - 15.0) < 1e-6 and absf(float(w["breakdown"]) - 5.0) < 1e-6,
+		"稳定 / 损伤 / 崩解权重不受材料词条影响")
+	# 无晋升词条对照：生物 T1 材料合计 promote = 0 → 乘数 1.00
+	var bmult := CraftSystem.promote_trait_mult("bio", 1, ["mat_bio_t1_residue", "mat_bio_t1_residue", "mat_bio_t1_residue", "mat_bio_t1_residue", "mat_bio_t1_residue"])
+	_check(absf(bmult - 1.0) < 1e-6, "无晋升词条的材料乘数 = 1.00（逐位不变）")
+
+	# 3) 精修：仿生心脏模组含「快速再生」(+6 品相)
+	var heart := "mat_bio_t4_heart"
+	GameState.add_item(heart, 1, 40.0)
+	GameState.set_condition(heart, 40.0)
+	var plan := CraftSystem.repair_plan(heart, 1)
+	_check(absf(float(plan["trait_repair"]) - 6.0) < 1e-6, "%s 精修词条加成 = +6 品相" % heart)
+	_check(absf(float(plan["after"]) - 56.0) < 1e-6, "精修 1 档：40 + 10 + 6 = 56（实际 %.0f）" % float(plan["after"]))
+	GameState.add_item("mat_bio_t1_residue", 30)
+	GameState.add_credits(100000)
+	var rres: Dictionary = CraftSystem.repair(heart, 1)
+	_check(bool(rres.get("ok", false)) and absf(GameState.condition_of(heart) - 56.0) < 1e-6,
+		"执行精修后品相精确为 56（实际 %.0f）" % GameState.condition_of(heart))
+
+	# 4) 翻新：同一物品「焕新 / 徒劳」精确转移、总量守恒；无词条物品逐位不变
+	var rw: Dictionary = CraftSystem.refurbish_weights_for(heart)
+	_check(absf(float(rw["pristine"]) - 53.0) < 1e-6 and absf(float(rw["fail"]) - 12.0) < 1e-6,
+		"%s 翻新权重：焕新 53 / 徒劳 12（词条 +8）" % heart)
+	_check(absf(_w_sum(rw) - 100.0) < 1e-6, "翻新权重总量守恒 100")
+	_check(_w_eq(CraftSystem.refurbish_weights_for(valve), GameData.refurbish_weights()),
+		"无翻新词条的物品与原始抽签表逐位一致")
+
+	# 5) 拆解：被格式化的数据盘含「可恢复 / 冗余校验」(各 +1/件)
+	var wreck := "wreck_data_t2_disk"
+	_check(int(GameData.item_trait_effects(wreck)["disassemble"]) == 2, "%s 拆解加成 = +2/件" % wreck)
+	_check(int(GameData.item_trait_effects("wreck_mech_t1_harness")["disassemble"]) == 0, "无拆解词条的残骸加成 = +0（逐位不变）")
+	GameState.add_item(wreck, 1)
+	var dres: Dictionary = CraftSystem.disassemble(wreck, 1)
+	var min_ok := true
+	for oid in dres.get("outputs", {}):
+		if int(dres["outputs"][oid]) < 3:   # 基础 min=1，加 +2 → 每条目至少 3
+			min_ok = false
+	_check(bool(dres.get("ok", false)) and min_ok, "拆解产出每条目 ≥3（基础 1~2，词条 +2）")
+
+	# 6) 卖价：单晶装甲板含「无晶界 / 原厂规格 / 精密校准」(卖价合计 +16%)
+	var armor := "mat_mech_t4_armor"
+	_check(absf(float(GameData.item_trait_effects(armor)["sell"]) - 0.16) < 1e-6,
+		"%s 卖价词条合计 = +16%%" % armor)
+	GameState.add_item(armor, 1)
+	var price := MarketSystem.price_of(armor)
+	var fee := float(GameData.market_cfg.get("sell_fee", 0.05))
+	var expected := maxi(1, int(round(float(price) * (1.0 - fee) * MarketSystem.condition_factor(armor) * 1.16)))
+	_check(MarketSystem.sell_price(armor) == expected, "%s 卖价 = 基础 × 品相系数 × 1.16（₡%d）" % [armor, MarketSystem.sell_price(armor)])

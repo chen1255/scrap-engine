@@ -20,6 +20,8 @@ func disassemble(wreck_id: String, count: int = 1) -> Dictionary:
 	var it: Dictionary = GameData.get_item(wreck_id)
 	var spec: Dictionary = it.get("disassemble", {})
 	var cond := GameState.condition_of(wreck_id)   # 拆解产出的品相继承自残骸
+	# 词条（阶段七）：残骸词条对每个产出条目做数量修正（±1/件），夹到 ≥0，为 0 时公式恒等
+	var bonus := int(GameData.item_trait_effects(wreck_id).get("disassemble", 0))
 	GameState.remove_item(wreck_id, count)
 
 	var outputs: Dictionary = {}
@@ -29,7 +31,7 @@ func disassemble(wreck_id: String, count: int = 1) -> Dictionary:
 			var oid := str(o.get("id", ""))
 			if not GameData.items.has(oid):
 				continue
-			var n := randi_range(int(o.get("min", 1)), int(o.get("max", 1)))
+			var n := clampi(randi_range(int(o.get("min", 1)), int(o.get("max", 1))) + bonus, 0, 999)
 			if n <= 0:
 				continue
 			if not outputs.has(oid):
@@ -44,8 +46,10 @@ func disassemble(wreck_id: String, count: int = 1) -> Dictionary:
 
 # ---------------- 阶段三：晋升 ----------------
 
-## 计算本次晋升的实际抽签表（含校准器 / 消耗品 / 保底修正），UI 可提前展示给玩家看
-func preview_odds(family: String, from_tier: int, opts: Dictionary = {}) -> Dictionary:
+## 计算本次晋升的实际抽签表（含校准器 / 消耗品 / 材料词条 / 保底修正），UI 可提前展示给玩家看。
+## consume_ids 为本次实际会投入的材料（空则用与 promote 完全一致的自动挑选逻辑），
+## 保证 UI 预览与真实执行永远一致。
+func preview_odds(family: String, from_tier: int, opts: Dictionary = {}, consume_ids: Array = []) -> Dictionary:
 	var step: Dictionary = GameData.promotion_step(from_tier)
 	if step.is_empty():
 		return {}
@@ -81,6 +85,12 @@ func preview_odds(family: String, from_tier: int, opts: Dictionary = {}) -> Dict
 		weights["damage"] = float(weights.get("damage", 0.0)) + float(weights.get("breakdown", 0.0))
 		weights["breakdown"] = 0.0
 
+	# 材料词条（阶段七）：本次实际投入的材料词条折算为「成功」权重的相对乘数。
+	# 乘数施加在核心催化之前——核心的「从损伤 + 崩解精确转移 +15」守恒语义因此完全保留。
+	# 无材料词条（mult = 1）时 success × 1.0，抽签表逐位不变。
+	var ids: Array = consume_ids if consume_ids.size() > 0 else _pick_consume(family, from_tier, int(GameData.recipes.get("consume", 5)), [])
+	weights["success"] = maxf(0.0, float(weights.get("success", 0.0)) * promote_trait_mult(family, from_tier, ids))
+
 	# 核心催化：投入 1 个核心，其 catalyst_bonus 折算为权重点，同样从「损伤 + 崩解」转给「成功」。
 	# 只有在该核心真实持有时才生效——保证「不投入核心」时抽签表与既有版本逐位一致。
 	var cat := str(opts.get("catalyst", ""))
@@ -96,6 +106,17 @@ func preview_odds(family: String, from_tier: int, opts: Dictionary = {}) -> Dict
 	for k in weights.keys():
 		weights[k] = maxf(0.0, float(weights[k]))
 	return weights
+
+# ---------------- 材料词条（阶段七） ----------------
+
+## 一批晋升材料对「成功」权重的相对乘数：1.0 = 无影响，>1 = 更易成功，<1 = 更难。
+## consume_ids 为空时按与 promote 相同的逻辑自动挑选。乘数夹在 [0.3, 2.5]，避免极端叠加。
+func promote_trait_mult(family: String, from_tier: int, consume_ids: Array = []) -> float:
+	var ids: Array = consume_ids if consume_ids.size() > 0 else _pick_consume(family, from_tier, int(GameData.recipes.get("consume", 5)), [])
+	var mult := 1.0
+	for id in ids:
+		mult += float(GameData.item_trait_effects(str(id)).get("promote", 0.0))
+	return clampf(mult, 0.3, 2.5)
 
 # ---------------- 核心催化 ----------------
 
@@ -151,7 +172,8 @@ func promote(family: String, from_tier: int, consume_ids: Array = [], opts: Dict
 
 	# 抽签表必须在此刻算好：催化加成的判定依赖「投入时确实持有该核心」，
 	# 放到消耗之后再算的话，核心已被移除、加成会凭空消失。
-	var weights := preview_odds(family, from_tier, opts)
+	# 材料词条也在此一并折算（chosen 即实际会消耗的 5 个材料）。
+	var weights := preview_odds(family, from_tier, opts, chosen)
 
 	# 先记下被消耗材料各自的保养度，退回时原样还回，避免无谓掉品相
 	var conds: Dictionary = {}
@@ -303,13 +325,15 @@ func repair_plan(item_id: String, steps: int) -> Dictionary:
 	var need := st * per
 	var credits := repair_credit_per_step(item_id) * st
 	var before := GameState.condition_of(item_id)
-	var after := minf(GameData.repair_max(), before + GameData.repair_step() * float(st))
+	# 词条（阶段七）：该物品的精修品相加成，仅在实际精修（档数 > 0）时施加一次；为 0 时公式恒等
+	var bonus := float(GameData.item_trait_effects(item_id).get("repair", 0.0)) if st > 0 else 0.0
+	var after := minf(GameData.repair_max(), before + GameData.repair_step() * float(st) + bonus)
 	var fam := str(GameData.get_item(item_id).get("family", ""))
 	var mtier := GameData.repair_material_tier()
 	return {
 		"steps": st, "credits": credits, "materials_need": need,
 		"materials_have": _family_material_total(fam, mtier),
-		"before": before, "after": after,
+		"before": before, "after": after, "trait_repair": bonus,
 	}
 
 ## 精修。steps = 档数（会被夹到上限内）。
@@ -338,6 +362,7 @@ func repair(item_id: String, steps: int) -> Dictionary:
 		"ok": true, "mode": "repair", "item": item_id, "steps": st,
 		"before": float(plan["before"]), "after": float(plan["after"]),
 		"credits": int(plan["credits"]), "materials": int(plan["materials_need"]),
+		"trait_repair": float(plan.get("trait_repair", 0.0)),
 	}
 	repair_resolved.emit(payload)
 	return payload
@@ -356,11 +381,27 @@ func refurbish_cost(item_id: String) -> Dictionary:
 ## 翻新的抽签表与目标值（UI 展示用）
 func refurbish_preview(item_id: String) -> Dictionary:
 	return {
-		"weights": GameData.refurbish_weights(),
+		"weights": refurbish_weights_for(item_id),
 		"targets": GameData.refurbish_cfg().get("targets", {}),
 		"outcomes": GameData.refurbish_outcomes(),
 		"condition": GameState.condition_of(item_id),
+		"trait_refurbish": float(GameData.item_trait_effects(item_id).get("refurbish", 0.0)),
 	}
+
+## 该物品翻新的抽签表：词条（阶段七）把权重点在「焕新」与「徒劳」之间转移。
+## 正 = 徒劳 → 焕新；负 = 焕新 → 徒劳。为 0 时与 GameData.refurbish_weights() 逐位一致。
+func refurbish_weights_for(item_id: String) -> Dictionary:
+	var w: Dictionary = GameData.refurbish_weights().duplicate()
+	var bonus := float(GameData.item_trait_effects(item_id).get("refurbish", 0.0))
+	if bonus > 0.0:
+		var take: float = minf(float(w.get("fail", 0.0)), bonus)
+		w["fail"] = float(w.get("fail", 0.0)) - take
+		w["pristine"] = float(w.get("pristine", 0.0)) + take
+	elif bonus < 0.0:
+		var take2: float = minf(float(w.get("pristine", 0.0)), -bonus)
+		w["pristine"] = float(w.get("pristine", 0.0)) - take2
+		w["fail"] = float(w.get("fail", 0.0)) + take2
+	return w
 
 func can_refurbish(item_id: String) -> Dictionary:
 	if GameState.count_of(item_id) <= 0:
@@ -386,7 +427,7 @@ func refurbish(item_id: String) -> Dictionary:
 	GameState.spend_credits(int(cost["credits"]))
 	_take_family_material(fam, GameData.repair_material_tier(), int(cost["materials_need"]))
 
-	var outcome := _roll(GameData.refurbish_weights())
+	var outcome := _roll(refurbish_weights_for(item_id))
 	var targets: Dictionary = GameData.refurbish_cfg().get("targets", {})
 	var after := before
 	if outcome != "fail" and targets.has(outcome):
