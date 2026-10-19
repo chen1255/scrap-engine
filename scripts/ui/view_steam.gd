@@ -156,14 +156,15 @@ func _rebuild_cloud() -> void:
 		_cloud_body.add_child(UIKit.muted("Steam 不可用，云存档功能已关闭。", 11))
 
 func _local_row() -> Control:
-	var exists := FileAccess.file_exists(GameState.SAVE_PATH)
+	var path := GameState.current_path()
+	var exists := FileAccess.file_exists(path)
 	var size := 0
 	var ts := 0
 	if exists:
-		var bytes := FileAccess.get_file_as_bytes(GameState.SAVE_PATH)
+		var bytes := FileAccess.get_file_as_bytes(path)
 		size = bytes.size()
-		ts = int(FileAccess.get_modified_time(GameState.SAVE_PATH))
-	return _kv("本地存档", "存在 · %s · %s" % [_fmt_size(size), _fmt_time(ts)] if exists else "不存在")
+		ts = int(FileAccess.get_modified_time(path))
+	return _kv("本地存档（槽 %d）" % GameState.save_slot, "存在 · %s · %s" % [_fmt_size(size), _fmt_time(ts)] if exists else "不存在")
 
 func _cloud_row() -> Control:
 	if not SteamService.is_available():

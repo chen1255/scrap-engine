@@ -238,7 +238,7 @@ func _refurbish_panel() -> Control:
 	var legend := UIKit.hbox(14)
 	for key in ["pristine", "good", "fail"]:
 		var oc: Dictionary = outcomes.get(key, {})
-		var col := Color(str(oc.get("color", "#FFFFFF")))
+		var col := UIKit.map_color_html(str(oc.get("color", "#FFFFFF")))
 		var cell := UIKit.vbox(1)
 		cell.add_child(UIKit.label(str(oc.get("name", key)), 11, col))
 		var pct := float(weights.get(key, 0.0)) / total * 100.0
@@ -352,7 +352,7 @@ func _play_spin(outcome: String) -> void:
 
 	var oc: Dictionary = outcomes.get(outcome, {})
 	_spin_title.text = str(oc.get("name", outcome))
-	_spin_title.add_theme_color_override("font_color", Color(str(oc.get("color", "#FFFFFF"))))
+	_spin_title.add_theme_color_override("font_color", UIKit.map_color_html(str(oc.get("color", "#FFFFFF"))))
 	UIKit.pop(_spin_title, 1.45, 0.34)
 	UIKit.wobble(_spin_title, 3.0, 0.4)
 	await get_tree().create_timer(0.55 if not _spin_skip else 0.22, true, false, true).timeout

@@ -11,6 +11,7 @@ const RepairViewR := preload("res://scripts/ui/view_repair.gd")
 const ExchangeViewR := preload("res://scripts/ui/view_exchange.gd")
 const CodexViewR := preload("res://scripts/ui/view_codex.gd")
 const SteamViewR := preload("res://scripts/ui/view_steam.gd")
+const SettingsViewR := preload("res://scripts/ui/view_settings.gd")
 
 var _views: Dictionary = {}
 var _nav_btns: Dictionary = {}
@@ -29,8 +30,17 @@ var _wire_btn: Button
 var _toast_wrap: Control
 var _toast_label: Label
 var _toast_timer: Timer
+var _rebuilding := false
 
 func _ready() -> void:
+	_build_all()
+	_connect_systems()
+	_refresh_hud()
+	switch_view("market")
+	show_toast("欢迎来到轨道黑市。先开一箱，再去拆解台提纯。")
+
+## 构建整棵界面树（重建界面时复用同一套流程，保证两条路径完全一致）。
+func _build_all() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	theme = UIKitR.make_theme()
 	_build_background()
@@ -38,6 +48,7 @@ func _ready() -> void:
 	_build_inspect_layer()
 	_build_toast()
 
+func _connect_systems() -> void:
 	GameState.inventory_changed.connect(_on_inventory_changed)
 	GameState.credits_changed.connect(_on_credits_changed)
 	GameState.energy_changed.connect(_on_energy_changed)
@@ -45,9 +56,32 @@ func _ready() -> void:
 	GameState.market_tick.connect(_on_market_tick)
 	MarketSystem.prices_changed.connect(_on_prices_changed)
 
+func _disconnect_systems() -> void:
+	GameState.inventory_changed.disconnect(_on_inventory_changed)
+	GameState.credits_changed.disconnect(_on_credits_changed)
+	GameState.energy_changed.disconnect(_on_energy_changed)
+	GameState.codex_changed.disconnect(_on_codex_changed)
+	GameState.market_tick.disconnect(_on_market_tick)
+	MarketSystem.prices_changed.disconnect(_on_prices_changed)
+
+## 字号 / 配色变更后必须重建整棵界面树：绝大多数字号是逐控件的 theme override，
+## 只有重建才能让新设置真正作用到每一个标签上。延迟一帧执行，避免在触发者自己的信号回调里自毁。
+func rebuild_ui() -> void:
+	if _rebuilding:
+		return
+	_rebuilding = true
+	await get_tree().process_frame
+	var keep := _current
+	_disconnect_systems()
+	for c in get_children():
+		c.free()
+	_views.clear()
+	_nav_btns.clear()
+	_build_all()
+	_connect_systems()
 	_refresh_hud()
-	switch_view("market")
-	show_toast("欢迎来到轨道黑市。先开一箱，再去拆解台提纯。")
+	switch_view(keep if keep != "" else "market")
+	_rebuilding = false
 
 # ---------------- 背景 ----------------
 
@@ -130,12 +164,12 @@ func _build_hud() -> Control:
 	tick_btn.pressed.connect(func(): MarketSystem.advance_tick(); show_toast("时间推进：行情已刷新"))
 	h.add_child(tick_btn)
 
-	var mute_btn := UIKitR.btn("音效：开")
+	var mute_btn := UIKitR.btn("音效：" + ("开" if Settings.sfx_enabled else "关"))
 	mute_btn.tooltip_text = "开关全部音效"
 	mute_btn.pressed.connect(func():
-		var now_muted := Sfx.toggle_mute()
-		mute_btn.text = "音效：关" if now_muted else "音效：开"
-		show_toast("音效已关闭" if now_muted else "音效已开启"))
+		Settings.toggle_sfx()
+		mute_btn.text = "音效：" + ("开" if Settings.sfx_enabled else "关")
+		show_toast("音效已开启" if Settings.sfx_enabled else "音效已关闭"))
 	h.add_child(mute_btn)
 
 	var save_btn := UIKitR.btn("存档")
@@ -157,6 +191,7 @@ func _build_nav() -> Control:
 		["exchange", "交易所", "单机模拟行情"],
 		["codex", "图鉴", "收集与检视"],
 		["steam", "对接 Steam", "成就 · 云存档"],
+		["settings", "设置", "音频 · 画面 · 存档槽"],
 	]
 	var p := UIKitR.panel(UIKitR.PANEL, 12, UIKitR.LINE)
 	p.custom_minimum_size.x = 196
@@ -191,6 +226,7 @@ func _create_views() -> void:
 		["exchange", ExchangeViewR],
 		["codex", CodexViewR],
 		["steam", SteamViewR],
+		["settings", SettingsViewR],
 	]
 	for d in defs:
 		var v: Control = (d[1] as GDScript).new()
@@ -225,6 +261,8 @@ func switch_view(id: String) -> void:
 			v.refresh()
 		# 视图切换过渡：新视图淡入，避免生硬跳变
 		UIKitR.fade_in(v, 0.18)
+	# BGM 跟随视图切换（无音频资源 / 关闭 BGM 时安全降级）
+	Bgm.play_view(id)
 
 func _refresh_views() -> void:
 	for k in _views:

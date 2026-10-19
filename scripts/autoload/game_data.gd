@@ -86,7 +86,7 @@ func tier_name(t: int) -> String:
 	return str(tier_info(t).get("name", "?"))
 
 func tier_color(t: int) -> Color:
-	return Color(str(tier_info(t).get("color", "#FFFFFF")))
+	return UIKit.map_color(Color(str(tier_info(t).get("color", "#FFFFFF"))))
 
 func tier_glow(t: int) -> Color:
 	return Color(str(tier_info(t).get("glow", "#333333")))
@@ -95,7 +95,7 @@ func family_name(fid: String) -> String:
 	return str(family_map.get(fid, {}).get("name", fid))
 
 func family_color(fid: String) -> Color:
-	return Color(str(family_map.get(fid, {}).get("color", "#FFFFFF")))
+	return UIKit.map_color(Color(str(family_map.get(fid, {}).get("color", "#FFFFFF"))))
 
 func crate(id: String) -> Dictionary:
 	return crate_map.get(id, {})
@@ -166,11 +166,17 @@ func item_traits(id: String) -> Array:
 	return out
 
 ## 保养度（0~100）落在哪一档
+## 返回品相档位信息（含名称与配色）；配色经 UIKit.map_color 以便色盲模式生效。
 func condition_grade(cond: float) -> Dictionary:
 	for c in conditions:
 		if cond >= float(c.get("min", 0)):
-			return c
-	return conditions[-1] if conditions.size() > 0 else { "name": "未知", "color": "#FFFFFF" }
+			return _grade_mapped(c)
+	return _grade_mapped(conditions[-1]) if conditions.size() > 0 else { "name": "未知", "color": "#FFFFFF" }
+
+func _grade_mapped(c: Dictionary) -> Dictionary:
+	var d := c.duplicate()
+	d["color"] = "#" + UIKit.map_color(Color(str(c.get("color", "#FFFFFF")))).to_html(false)
+	return d
 
 ## 开箱时每件物品的保养度范围
 func cond_roll_range() -> Vector2:

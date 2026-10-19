@@ -171,22 +171,25 @@ func _sfx_error() -> PackedFloat32Array:
 
 # ---------------- 合成原语 ----------------
 
-func _buf(dur: float) -> PackedFloat32Array:
+static func _buf(dur: float) -> PackedFloat32Array:
 	var b := PackedFloat32Array()
 	b.resize(int(dur * SR))
 	b.fill(0.0)
 	return b
 
-## 往缓冲里叠加一个音符：指数衰减包络 + 可选线性扫频
-func _note(buf: PackedFloat32Array, start: float, dur: float, freq: float, amp := 0.5,
-		wave := "sine", attack := 0.004, decay := 5.0, pitch_end := 0.0) -> void:
+## 往缓冲里叠加一个音符：指数衰减包络 + 可选线性扫频。
+## wrap=true 时，越过缓冲末尾的尾音回卷到开头——用于合成可无缝循环的 BGM。
+static func _note(buf: PackedFloat32Array, start: float, dur: float, freq: float, amp := 0.5,
+		wave := "sine", attack := 0.004, decay := 5.0, pitch_end := 0.0, wrap := false) -> void:
 	var n := buf.size()
 	var i0 := int(start * SR)
 	var ln := maxi(1, int(dur * SR))
 	for k in range(ln):
 		var i := i0 + k
 		if i < 0 or i >= n:
-			continue
+			if not wrap:
+				continue
+			i = posmod(i, n)
 		var t := float(k) / SR
 		var env := minf(1.0, t / maxf(0.0005, attack)) * exp(-decay * t / maxf(0.0005, dur))
 		var f := freq if pitch_end <= 0.0 else lerpf(freq, pitch_end, float(k) / float(ln))
@@ -208,7 +211,7 @@ func _note(buf: PackedFloat32Array, start: float, dur: float, freq: float, amp :
 # ---------------- 写出 WAV ----------------
 
 ## 归一化并写成 16-bit PCM 单声道 WAV
-func _write_wav(path: String, buf: PackedFloat32Array) -> bool:
+static func _write_wav(path: String, buf: PackedFloat32Array) -> bool:
 	var mx := 0.0
 	for v in buf:
 		mx = maxf(mx, absf(v))

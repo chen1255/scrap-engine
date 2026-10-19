@@ -7,8 +7,10 @@ signal inventory_changed()
 signal codex_changed(item_id: String)
 signal market_tick(tick: int)
 signal saved()   # 存档写入成功后触发，供云存档自动上传等外部系统挂钩
+signal slot_changed(slot: int)   # 切换存档槽位后触发
 
-const SAVE_PATH := "user://scrap_engine_save.json"
+const SAVE_PATH := "user://scrap_engine_save.json"   # 槽 1 的路径（历史存档，保持兼容）
+const SLOT_COUNT := 3
 const START_CREDITS := 600
 const START_ENERGY := 12
 const MAX_ENERGY := 12
@@ -22,6 +24,7 @@ var codex: Dictionary = {}            # item_id -> true 表示已发现
 var achievements: Dictionary = {}     # achievement_id -> true 表示已解锁（本地权威）
 var calibrator_level: int = 0         # 概率校准器等级
 var pity: Dictionary = {}             # "family|fromTier" -> 连续失败次数
+var save_slot: int = 1                # 当前存档槽位（1~3）
 var stats: Dictionary = {
 	"opens": 0, "dismantles": 0, "promote_attempts": 0,
 	"success": 0, "hold": 0, "damage": 0, "breakdown": 0,
@@ -201,6 +204,81 @@ func pity_bump(family: String, from_tier: int) -> void:
 func pity_reset(family: String, from_tier: int) -> void:
 	pity.erase(pity_key(family, from_tier))
 
+# ---------------- 存档槽位 ----------------
+
+## 槽位文件路径。槽 1 沿用历史路径，保证老存档与 Steam 云文件名不变。
+func slot_path(n: int) -> String:
+	var s := clampi(n, 1, SLOT_COUNT)
+	if s == 1:
+		return SAVE_PATH
+	return "user://scrap_engine_save_slot%d.json" % s
+
+func current_path() -> String:
+	return slot_path(save_slot)
+
+## 是否存在该槽位的存档文件
+func slot_exists(n: int) -> bool:
+	return FileAccess.file_exists(slot_path(n))
+
+## 槽位摘要（供设置页展示）：无存档时 exists=false，其余字段为默认值。
+func slot_summary(n: int) -> Dictionary:
+	var path := slot_path(n)
+	var out := {
+		"slot": clampi(n, 1, SLOT_COUNT), "path": path, "exists": false,
+		"credits": 0, "energy": 0, "items": 0, "codex": 0, "calibrator": 0,
+		"achievements": 0, "time": 0, "current": clampi(n, 1, SLOT_COUNT) == save_slot,
+	}
+	if not FileAccess.file_exists(path):
+		return out
+	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	out["exists"] = true
+	out["time"] = int(FileAccess.get_modified_time(path))
+	if typeof(d) != TYPE_DICTIONARY:
+		return out
+	var dd: Dictionary = d
+	out["credits"] = int(dd.get("credits", 0))
+	out["energy"] = int(dd.get("energy", 0))
+	out["calibrator"] = int(dd.get("calibrator_level", 0))
+	var inv: Variant = dd.get("inventory", {})
+	if typeof(inv) == TYPE_DICTIONARY:
+		var total := 0
+		for id in (inv as Dictionary):
+			var v: Variant = (inv as Dictionary)[id]
+			total += int(v.get("n", 0)) if typeof(v) == TYPE_DICTIONARY else int(v)
+		out["items"] = total
+	var cx: Variant = dd.get("codex", {})
+	if typeof(cx) == TYPE_DICTIONARY:
+		out["codex"] = (cx as Dictionary).size()
+	var ac: Variant = dd.get("achievements", {})
+	if typeof(ac) == TYPE_DICTIONARY:
+		out["achievements"] = (ac as Dictionary).size()
+	return out
+
+## 切到某个槽位。load_now=true 时立即读取该槽存档（读不到则开新档）。
+func use_slot(n: int, load_now: bool = true) -> void:
+	save_slot = clampi(n, 1, SLOT_COUNT)
+	if load_now:
+		if not load_game():
+			reset_new_game()
+	else:
+		reset_new_game()
+	credits_changed.emit(credits)
+	energy_changed.emit(energy)
+	inventory_changed.emit()
+	slot_changed.emit(save_slot)
+
+## 删除某个槽位的存档文件；若删的正是当前槽位，则立刻重开新档。
+func delete_slot(n: int) -> void:
+	var path := slot_path(n)
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	if clampi(n, 1, SLOT_COUNT) == save_slot:
+		reset_new_game()
+		credits_changed.emit(credits)
+		energy_changed.emit(energy)
+		inventory_changed.emit()
+	slot_changed.emit(save_slot)
+
 # ---------------- 存档 ----------------
 
 func to_dict() -> Dictionary:
@@ -217,7 +295,7 @@ func to_dict() -> Dictionary:
 	}
 
 func save_game() -> void:
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(current_path(), FileAccess.WRITE)
 	if f == null:
 		push_error("存档失败: " + str(FileAccess.get_open_error()))
 		return
@@ -226,9 +304,10 @@ func save_game() -> void:
 	saved.emit()
 
 func load_game() -> bool:
-	if not FileAccess.file_exists(SAVE_PATH):
+	var path := current_path()
+	if not FileAccess.file_exists(path):
 		return false
-	var txt := FileAccess.get_file_as_string(SAVE_PATH)
+	var txt := FileAccess.get_file_as_string(path)
 	var d: Variant = JSON.parse_string(txt)
 	if typeof(d) != TYPE_DICTIONARY:
 		return false
@@ -264,6 +343,10 @@ func _normalize_inventory() -> void:
 			inventory[id] = { "n": n, "cs": cs }
 
 func wipe_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	var path := current_path()
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	reset_new_game()
+	credits_changed.emit(credits)
+	energy_changed.emit(energy)
+	inventory_changed.emit()

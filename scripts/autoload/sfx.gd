@@ -25,8 +25,15 @@ var _next := 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# 静音开关的权威来源是 Settings（音频总线）；这里同步一份快路径标记
+	var settings := get_node_or_null("/root/Settings")
+	if settings != null:
+		muted = not bool(settings.get("sfx_enabled"))
+	# 音效统一走 SFX 总线（由 Settings 在运行期创建）；缺失时回落到 Master
+	var bus := "SFX" if AudioServer.get_bus_index("SFX") >= 0 else "Master"
 	for _i in range(VOICES):
 		var p := AudioStreamPlayer.new()
+		p.bus = bus
 		p.volume_db = BASE_DB
 		add_child(p)
 		_players.append(p)

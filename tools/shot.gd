@@ -11,6 +11,7 @@ func _ready() -> void:
 	var view := "market"
 	var seed_all := false
 	var inspect := ""
+	var variant := ""
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--view="):
 			view = a.substr(7)
@@ -18,6 +19,14 @@ func _ready() -> void:
 			inspect = a.substr(10)
 		elif a == "--seed":
 			seed_all = true
+		elif a == "--colorblind":
+			# 直接改内存态，避开 Settings 的自动落盘，免得开发期截图污染用户配置
+			Settings.colorblind = true
+			variant += "_cb"
+		elif a.begins_with("--font-scale="):
+			Settings.font_scale = float(a.substr(13))
+			variant += "_fs" + a.substr(13)
+	Settings.apply_ui()
 
 	if seed_all:
 		for id in GameData.item_order:
@@ -41,7 +50,7 @@ func _ready() -> void:
 
 	var img := get_viewport().get_texture().get_image()
 	var tag := inspect if inspect != "" else view
-	var path := out_dir.path_join("%s%s.png" % [tag, "_seed" if seed_all else ""])
+	var path := out_dir.path_join("%s%s%s.png" % [tag, "_seed" if seed_all else "", variant])
 	var err := img.save_png(path)
 	print("[shot] %s -> %s (err=%d)" % [view, path, err])
 	get_tree().quit(0 if err == OK else 1)

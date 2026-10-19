@@ -150,7 +150,7 @@ func _odds_panel() -> Control:
 	for key in ["success", "hold", "damage", "breakdown"]:
 		var oc: Dictionary = GameData.outcomes.get(key, {})
 		var pct := float(weights.get(key, 0.0)) / total * 100.0
-		var col := Color(str(oc.get("color", "#FFFFFF")))
+		var col := UIKit.map_color_html(str(oc.get("color", "#FFFFFF")))
 		var item := UIKit.vbox(1)
 		var l1 := UIKit.label(str(oc.get("name", key)), 11, col)
 		var l2 := UIKit.label("%.1f%%" % pct, 14, UIKit.TEXT)
@@ -306,7 +306,7 @@ func _play_spin(outcome: String) -> void:
 	# 定格
 	var oc: Dictionary = GameData.outcomes.get(outcome, {})
 	_spin_title.text = str(oc.get("name", outcome))
-	_spin_title.add_theme_color_override("font_color", Color(str(oc.get("color", "#FFFFFF"))))
+	_spin_title.add_theme_color_override("font_color", UIKit.map_color_html(str(oc.get("color", "#FFFFFF"))))
 	UIKit.pop(_spin_title, 1.45, 0.34)
 	UIKit.wobble(_spin_title, 3.0, 0.4)
 	Sfx.play_outcome(outcome)
@@ -326,7 +326,7 @@ func _result_panel() -> Control:
 		v.add_child(UIKit.muted("还没有进行过晋升。选好族系与阶位，点「晋升」试试手气。", 12))
 		return p
 	var oc: Dictionary = GameData.outcomes.get(str(_last["outcome"]), {})
-	var col := Color(str(oc.get("color", "#FFFFFF")))
+	var col := UIKit.map_color_html(str(oc.get("color", "#FFFFFF")))
 	v.add_child(UIKit.label(str(oc.get("name", "")), 26, col))
 	v.add_child(UIKit.muted(str(oc.get("desc", "")), 12))
 	if str(_last.get("gained", "")) != "":

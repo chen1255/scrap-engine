@@ -38,7 +38,9 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 维修台 | 两条回补路径：精修（确定性，每档 +10 品相，费用 = 基准价 × 4% + 同族 T1 材料 ×1）与翻新（一次性概率，费用 = 基准价 × 16% + 同族 T1 材料 ×2，抽签 45% 焕新 / 35% 良修 / 20% 徒劳） |
 | 词条 | 每族系 8 条，由物品 id 确定性抽取 —— 同一件物品的词条永远一致，不同存档可复现 |
 | 检视属性 | 每件物品 4 个数值，维度名由族系决定，数值取自 `data/items.json` |
-| 音效与演出 | 17 段程序化合成的短音效（零外部素材）+ 开箱逐件翻牌揭示、熔炉/翻新抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
+| 音频与演出 | 17 段程序化合成的短音效 + 3 段循环 BGM + 1 段环境铺底（零外部素材），BGM 随视图自动交叉淡切；开箱逐件翻牌揭示、熔炉/翻新抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
+| 设置 | 侧栏「设置」页：主音量 / 音效音量 / BGM 音量、音效与 BGM 开关、全屏与分辨率、界面字号（4 档）、色盲友好配色；改动即时生效并落盘 `scrap_settings.cfg` |
+| 存档槽位 | 3 个独立槽位（1 号沿用旧文件名，向后兼容）；每个槽独立保存进度，可与 Steam 云存档按槽位名联动 |
 
 ### 数据规模
 
@@ -74,15 +76,15 @@ scrap-engine/
 ├── scenes/
 │   └── main.tscn            # 唯一主场景
 ├── scripts/
-│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Sfx / Achievements / SteamService
-│   └── ui/                  # 主界面、8 个视图、全息检视面板、UI 组件库（含动效原语）
+│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Settings / Sfx / Bgm / Achievements / SteamService
+│   └── ui/                  # 主界面、9 个视图、全息检视面板、UI 组件库（含动效原语）
 ├── shaders/                 # 全息卡片与全息图标着色器
 ├── assets/
 │   ├── icons/               # 43 张 512×512 透明物品图标（含「未知」占位）
-│   ├── audio/               # 17 段程序化合成的音效 WAV（由 tools/gen_sfx.gd 生成）
+│   ├── audio/               # 17 段音效 + 3 段循环 BGM + 1 段环境音（由 tools/gen_sfx.gd、tools/gen_bgm.gd 生成）
 │   └── branding/            # 应用图标（png + 多尺寸 ico）
-├── tests/                   # headless 自测：概率（sim_rates）/ Steam 集成（sim_steam）
-└── tools/                   # 开发期工具：图标烘焙、音效合成、视图截图、Steam addon 拉取
+├── tests/                   # headless 自测：概率（sim_rates）/ Steam（sim_steam）/ 设置与音频（sim_settings）
+└── tools/                   # 开发期工具：图标烘焙、音效 / BGM 合成、视图截图、Steam addon 拉取
 ```
 
 ### 运行
@@ -95,16 +97,32 @@ scrap-engine/
   Godot_v4.7.2-stable_win64.exe --path . res://scenes/main.tscn
   ```
 
-### 音效与演出
+### 音频与演出
 
-音效全部由脚本离线合成，仓库内不含任何第三方音频素材，许可证干净且可复现。17 段音效（点击 / 开箱 / 翻牌 / T1~T5 揭示 / 抽签滚动 / 成功 / 稳定 / 损伤 / 崩解 / 拆解 / 精修 / 交易 / 错误）在 `assets/audio/`，由固定随机种子生成，重跑不产生差异：
+音效与 BGM 全部由脚本离线合成，仓库内不含任何第三方音频素材，许可证干净且可复现。
+
+**音效** —— 17 段（点击 / 开箱 / 翻牌 / T1~T5 揭示 / 抽签滚动 / 成功 / 稳定 / 损伤 / 崩解 / 拆解 / 精修 / 交易 / 错误）在 `assets/audio/`，由固定随机种子生成，重跑不产生差异：
 
 ```powershell
 # 重新生成音效（仅在需要调整音色时执行）
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.tscn
 ```
 
-运行时由 `Sfx` 自动加载单例统一播放（10 路播放池、支持延迟触发与静音），HUD 右上角的「音效：开/关」按钮可随时切换。演出采用轻快利落风格：开箱逐件翻牌揭示（连开更快）、熔炉与维修台翻新抽签滚动定格（点击任意处跳过），整套演出默认 1~2 秒内完成。
+**BGM** —— 3 段可无缝循环的曲目（大厅 / 车间 / 交易所）+ 1 段环境铺底，同样离线合成、固定种子；运行期由 `Bgm` 单例按当前视图自动交叉淡切（0.8 秒），环境音常驻：
+
+```powershell
+# 重新生成 BGM / 环境音（仅在需要调整音色时执行）
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.tscn
+```
+
+运行时由 `Sfx` 单例统一播放音效（10 路播放池、支持延迟触发与静音）；音量分三级总线 **Master → Music / SFX**，可在设置页分别调节。演出采用轻快利落风格：开箱逐件翻牌揭示（连开更快）、熔炉与维修台翻新抽签滚动定格（点击任意处跳过），整套演出默认 1~2 秒内完成。
+
+### 设置与存档槽位
+
+侧栏「设置」页集中管理：主音量 / 音效音量 / BGM 音量三条滑杆、音效与 BGM 两个开关、全屏开关与分辨率档位、界面字号（标准 1.0× / 大 1.15× / 特大 1.3× / 小 0.9×）、以及**色盲友好配色**。所有改动即时生效并自动写入 `user://scrap_settings.cfg`，下次启动沿用。
+
+- **色盲友好配色**：开启后把语义色（`OK` 绿 / `BAD` 红 / `WARN` 橙，以及由 JSON 数据驱动的族系色、品相色、阶次色）整体替换为 Okabe–Ito 系高区分度版本（绿→天蓝、红→朱橙、橙→正黄……），品牌主色（青 / 紫）保持不变；掉率占比条、图例、抽签标题等全部同步。
+- **存档槽位**：3 个独立槽位，可随时切换 / 重新载入 / 删除；槽 1 沿用历史文件名 `scrap_engine_save.json`（向后兼容），云存档文件名随槽位变化（如槽 2 = `scrap_engine_save_slot2.json`）。
 
 ### Steam 集成（可选）
 
@@ -139,6 +157,12 @@ Steam 集成自测（降级安全 / 成就规则 / 存档往返），同样以 `
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_steam.tscn
 ```
 
+设置与音频自测（音频总线 / BGM 循环与视图映射 / 设置往返持久化 / 配色与字号 / 3 存档槽位）：
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_settings.tscn
+```
+
 ### 打包 Windows 构建
 
 ```powershell
@@ -154,6 +178,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 | 阶段一 | 程序化合成音效层 + 开箱 / 晋升演出 | 完成 |
 | 阶段二 | 维修台（确定性精修 + 一次性概率翻新） | 完成 |
 | 阶段三 | Steam 对接（成就 + 云存档 + 状态面板，可优雅降级） | 完成 |
+| 阶段四 | 呈现打磨：循环 BGM + 环境音、设置页（音量 / 画面 / 字号 / 色盲友好）、3 存档槽位（与云存档联动） | 完成 |
 
 开发期截图工具（需要渲染设备，不能 `--headless`）：
 
@@ -161,7 +186,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 Godot_v4.7.2-stable_win64.exe --path . res://tools/shot.tscn -- --view=inventory --seed
 ```
 
-`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / steam`，`--inspect=<item_id>` 可直接打开全息检视面板。
+`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / steam / settings`，`--inspect=<item_id>` 可直接打开全息检视面板；另有 `--colorblind`（色盲配色）与 `--font-scale=<x>`（字号缩放）用于核对设置效果。
 
 ### 许可
 
@@ -201,7 +226,9 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Repair bench | Two restore routes: precision repairs (deterministic, +10 condition per grade, cost = base price × 4% + 1 same-family T1 material) and refurbishing (one-shot probability, cost = base price × 16% + 2 same-family T1 materials, drawing 45% renew / 35% mend / 20% futile) |
 | Traits | 8 per family, deterministically derived from the item id — the same item always rolls the same traits, so saves are reproducible |
 | Inspection stats | 4 numeric values per item; dimension names come from the family, values from `data/items.json` |
-| Audio & presentation | 17 procedurally synthesized sound effects (no external assets) plus card-by-card reveal, furnace/refurbish draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
+| Audio & presentation | 17 procedurally synthesized sound effects + 3 seamless-loop BGM tracks + 1 ambient bed (no external assets), with BGM auto-crossfading per view; card-by-card reveal, furnace/refurbish draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
+| Settings | A "Settings" view: master / SFX / BGM volume, SFX & BGM toggles, fullscreen and resolution, UI font scale (4 steps), and a colorblind-friendly palette; changes apply instantly and persist to `scrap_settings.cfg` |
+| Save slots | 3 independent slots (slot 1 keeps the legacy filename for backward compatibility); each holds its own progress and maps to a Steam cloud filename per slot |
 
 | Content | Count |
 |---|---|
@@ -224,14 +251,30 @@ Requires **Godot 4.7.2-stable**.
 
 ### Audio & presentation
 
-All sound effects are synthesized offline by a script — the repo ships no third-party audio, so licensing is clean and results are reproducible. The 17 effects (click / open / flip / T1–T5 reveal / draw spin / success / hold / damage / breakdown / disassemble / repair / trade / error) live in `assets/audio/` and are generated from a fixed random seed, so re-running produces identical files:
+All sound effects and BGM are synthesized offline by scripts — the repo ships no third-party audio, so licensing is clean and results are reproducible.
+
+**Sound effects** — 17 of them (click / open / flip / T1–T5 reveal / draw spin / success / hold / damage / breakdown / disassemble / repair / trade / error) in `assets/audio/`, generated from a fixed random seed so re-running produces identical files:
 
 ```powershell
 # Regenerate audio (only needed when tweaking the timbre)
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_sfx.tscn
 ```
 
-At runtime a `Sfx` autoload singleton handles playback (10-voice pool, delayed triggers, mute); the "Audio: on/off" button in the top-right HUD toggles mute at any time. Presentation is brisk and snappy: card-by-card crate reveals (faster when opening in bulk) and a spin-and-settle draw shared by the furnace and the refurbish bench (skippable by clicking anywhere), with each sequence finishing within 1–2 seconds.
+**BGM** — 3 seamless-loop tracks (lobby / workshop / exchange) plus 1 ambient bed, also synthesized offline from a fixed seed; at runtime a `Bgm` singleton crossfades between them per current view (0.8 s) while the ambient bed stays on:
+
+```powershell
+# Regenerate BGM / ambient (only needed when tweaking the timbre)
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.tscn
+```
+
+At runtime a `Sfx` singleton handles playback (10-voice pool, delayed triggers, mute); volume runs through a three-level bus chain **Master → Music / SFX**, adjustable separately in the Settings view. Presentation is brisk and snappy: card-by-card crate reveals (faster when opening in bulk) and a spin-and-settle draw shared by the furnace and the refurbish bench (skippable by clicking anywhere), with each sequence finishing within 1–2 seconds.
+
+### Settings & save slots
+
+The "Settings" view centralizes: master / SFX / BGM volume sliders, SFX & BGM toggles, fullscreen and resolution, UI font scale (Standard 1.0× / Large 1.15× / XL 1.3× / Small 0.9×), and a **colorblind-friendly palette**. Every change applies instantly and is written to `user://scrap_settings.cfg`, reloaded on next launch.
+
+- **Colorblind-friendly palette** — When enabled, semantic colors (`OK` green / `BAD` red / `WARN` amber, plus the JSON-driven family, condition, and tier colors) are swapped for high-contrast Okabe–Ito variants (green→sky blue, red→vermillion, amber→yellow, …), while brand colors (cyan / violet) stay put; odds bars, legends, and draw titles all follow.
+- **Save slots** — 3 independent slots that can be switched / reloaded / deleted at any time; slot 1 keeps the legacy filename `scrap_engine_save.json` (backward compatible), and the cloud filename follows the slot (e.g. slot 2 = `scrap_engine_save_slot2.json`).
 
 ### Drop-rate self-test
 
@@ -239,6 +282,18 @@ Verifies that the actual distributions match the configured rates for the black-
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_rates.tscn
+```
+
+Steam integration self-test (degrade safety / achievement rules / save round-trip), also `[PASS]` + exit code 0; **it must pass even when the addon is absent**:
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_steam.tscn
+```
+
+Settings & audio self-test (audio buses / BGM loop & view mapping / settings persistence round-trip / palette & font scale / 3 save slots):
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_settings.tscn
 ```
 
 ### Building for Windows

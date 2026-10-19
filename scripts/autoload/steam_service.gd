@@ -7,10 +7,16 @@ extends Node
 ##
 ## 本地存档始终是权威状态；Steam 侧仅做 best-effort 同步，任何调用失败都不影响玩法。
 
-const SAVE_PATH := "user://scrap_engine_save.json"
-const CLOUD_NAME := "scrap_engine_save.json"   # 云端文件名（与本地同名）
 const APPID_FILE := "res://steam_appid.txt"
 const DEFAULT_APP_ID := 480                     # Spacewar：Valve 公共测试 app
+
+## 本地存档路径与云端文件名都跟随 GameState 的当前槽位：
+## 槽 1 → scrap_engine_save.json（历史兼容），槽 2/3 → ..._slot2 / _slot3。
+func _local_path() -> String:
+	return GameState.current_path()
+
+func cloud_name() -> String:
+	return GameState.current_path().get_file()
 
 var _steam: Object = null                       # Steam 单例（缺失时为 null）
 var _available := false
@@ -117,12 +123,12 @@ func _push_all_unlocked() -> void:
 func cloud_upload() -> Dictionary:
 	if not _available:
 		return { "ok": false, "reason": unavailable_reason() }
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(_local_path()):
 		return { "ok": false, "reason": "本地没有存档文件" }
-	var bytes := FileAccess.get_file_as_bytes(SAVE_PATH)
+	var bytes := FileAccess.get_file_as_bytes(_local_path())
 	if bytes.is_empty():
 		return { "ok": false, "reason": "本地存档为空" }
-	var ok := bool(_steam.call("fileWrite", CLOUD_NAME, bytes, bytes.size()))
+	var ok := bool(_steam.call("fileWrite", cloud_name(), bytes, bytes.size()))
 	if not ok:
 		_last_error = "Steam 云写入失败"
 	return { "ok": ok, "reason": "" if ok else "Steam 云写入失败", "size": bytes.size() }
@@ -130,14 +136,14 @@ func cloud_upload() -> Dictionary:
 func cloud_info() -> Dictionary:
 	if not _available:
 		return { "available": false, "reason": unavailable_reason() }
-	var exists := bool(_steam.call("fileExists", CLOUD_NAME))
+	var exists := bool(_steam.call("fileExists", cloud_name()))
 	var size := 0
 	var ts := 0
 	if exists:
 		if _steam.has_method("getFileSize"):
-			size = int(_steam.call("getFileSize", CLOUD_NAME))
+			size = int(_steam.call("getFileSize", cloud_name()))
 		if _steam.has_method("getFileTimestamp"):
-			ts = int(_steam.call("getFileTimestamp", CLOUD_NAME))
+			ts = int(_steam.call("getFileTimestamp", cloud_name()))
 	var quota: Dictionary = {}
 	if _steam.has_method("getQuota"):
 		var q: Variant = _steam.call("getQuota")
@@ -157,11 +163,11 @@ func cloud_info() -> Dictionary:
 func cloud_download(force: bool = false) -> Dictionary:
 	if not _available:
 		return { "ok": false, "reason": unavailable_reason() }
-	if not bool(_steam.call("fileExists", CLOUD_NAME)):
+	if not bool(_steam.call("fileExists", cloud_name())):
 		return { "ok": false, "reason": "云端没有存档" }
-	if not force and FileAccess.file_exists(SAVE_PATH):
-		var local_ts := int(FileAccess.get_modified_time(SAVE_PATH))
-		var cloud_ts := int(_steam.call("getFileTimestamp", CLOUD_NAME))
+	if not force and FileAccess.file_exists(_local_path()):
+		var local_ts := int(FileAccess.get_modified_time(_local_path()))
+		var cloud_ts := int(_steam.call("getFileTimestamp", cloud_name()))
 		if cloud_ts > 0 and local_ts >= cloud_ts:
 			return { "ok": false, "skipped": true, "reason": "本地存档更新，已跳过下载" }
 
@@ -169,7 +175,7 @@ func cloud_download(force: bool = false) -> Dictionary:
 	if buf.is_empty():
 		return { "ok": false, "reason": "云端存档为空或读取失败" }
 
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(_local_path(), FileAccess.WRITE)
 	if f == null:
 		return { "ok": false, "reason": "无法写入本地存档" }
 	f.store_buffer(buf)
@@ -183,14 +189,14 @@ func cloud_download(force: bool = false) -> Dictionary:
 	return { "ok": true, "size": buf.size() }
 
 func _read_cloud_bytes() -> PackedByteArray:
-	var rd: Variant = _steam.call("fileRead", CLOUD_NAME, 0)   # 0 = 整读
+	var rd: Variant = _steam.call("fileRead", cloud_name(), 0)   # 0 = 整读
 	var buf: PackedByteArray = PackedByteArray()
 	if typeof(rd) == TYPE_DICTIONARY:
 		buf = (rd as Dictionary).get("buffer", PackedByteArray())
 	if buf.is_empty() and _steam.has_method("getFileSize"):
-		var sz := int(_steam.call("getFileSize", CLOUD_NAME))
+		var sz := int(_steam.call("getFileSize", cloud_name()))
 		if sz > 0:
-			rd = _steam.call("fileRead", CLOUD_NAME, sz)
+			rd = _steam.call("fileRead", cloud_name(), sz)
 			if typeof(rd) == TYPE_DICTIONARY:
 				buf = (rd as Dictionary).get("buffer", PackedByteArray())
 	return buf

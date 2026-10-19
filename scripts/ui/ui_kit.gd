@@ -2,20 +2,111 @@ class_name UIKit
 extends RefCounted
 ## UI 工具箱：统一的赛博配色、样式盒、常用控件构造函数。
 ## 所有界面都从这里取样式，保证视觉一致；改这一处即可全局换肤。
+##
+## 配色在阶段四改为 **static var**：默认值与历史版本逐字节一致，
+## 运行期可整体切到「色盲友好」调色板，或按 SIZE_SCALE 缩放全部字号。
+## 另保留一组 _C_* 编译期常量，供函数默认参数使用（默认参数必须是常量表达式）。
 
-const BG        := Color("#0B0E14")
-const BG_SOFT   := Color("#121826")
-const PANEL     := Color("#141A26")
-const PANEL_HI  := Color("#1C2536")
-const LINE      := Color("#2A3446")
-const LINE_HI   := Color("#3E7BD6")
-const TEXT      := Color("#E6EDF7")
-const MUTED     := Color("#7C8AA0")
-const ACCENT    := Color("#4FC3F7")
-const ACCENT2   := Color("#7C6BFF")
-const WARN      := Color("#FFB74D")
-const OK        := Color("#4FE38A")
-const BAD       := Color("#FF5370")
+# ---- 默认调色板（编译期常量，仅作默认参数与还原用） ----
+const _C_BG       := Color("#0B0E14")
+const _C_BG_SOFT  := Color("#121826")
+const _C_PANEL    := Color("#141A26")
+const _C_PANEL_HI := Color("#1C2536")
+const _C_LINE     := Color("#2A3446")
+const _C_LINE_HI  := Color("#3E7BD6")
+const _C_TEXT     := Color("#E6EDF7")
+const _C_MUTED    := Color("#7C8AA0")
+const _C_ACCENT   := Color("#4FC3F7")
+const _C_ACCENT2  := Color("#7C6BFF")
+const _C_WARN     := Color("#FFB74D")
+const _C_OK       := Color("#4FE38A")
+const _C_BAD      := Color("#FF5370")
+
+# ---- 运行期调色板（默认 = 上面的默认值） ----
+static var BG        := _C_BG
+static var BG_SOFT   := _C_BG_SOFT
+static var PANEL     := _C_PANEL
+static var PANEL_HI  := _C_PANEL_HI
+static var LINE      := _C_LINE
+static var LINE_HI   := _C_LINE_HI
+static var TEXT      := _C_TEXT
+static var MUTED     := _C_MUTED
+static var ACCENT    := _C_ACCENT
+static var ACCENT2   := _C_ACCENT2
+static var WARN      := _C_WARN
+static var OK        := _C_OK
+static var BAD       := _C_BAD
+
+## 是否启用色盲友好配色（由 Settings.apply 设置）。
+static var COLORBLIND := false
+
+## 界面字号缩放系数（1.0 = 默认）；所有 UIKit 产出的文字按此比例放大。
+static var SIZE_SCALE := 1.0
+
+## Okabe–Ito 色盲友好映射：默认调色板里偏红/绿的关键状态色，
+## 替换为色盲下更易区分的蓝/橙/黄/品红系。仅动语义色，不动品牌主色。
+const _CB_MAP := {
+	"4fe38a": "56b4e9",   # OK 绿 → 天蓝
+	"ff5370": "d55e00",   # BAD 红 → 朱橙
+	"ffb74d": "f0e442",   # WARN 橙 → 明黄
+	"8fd98f": "e69f00",   # 生物族绿 → 琥珀
+	"7fb2c9": "56b4e9",   # 机械族蓝 → 天蓝（拉开与生物族距离）
+	"b39ddb": "cc79a7",   # 数据族紫 → 品红
+}
+
+## 把一个颜色映射到当前配色方案下的等价色；未启用色盲模式时原样返回。
+static func map_color(c: Color) -> Color:
+	if not COLORBLIND:
+		return c
+	var key := c.to_html(false)
+	if _CB_MAP.has(key):
+		return Color("#" + str(_CB_MAP[key]))
+	return c
+
+## 数据文件里的语义色多以 "#RRGGBB" 字符串形式给出，这里做一次解析 + 映射，
+## 让掉率占比条 / 图例 / 抽签标题等「数据来源色」也跟随色盲模式。
+static func map_color_html(hex: String) -> Color:
+	return map_color(Color(hex))
+
+## 整体切换配色：colorblind=true 时用色盲友好版本覆盖语义色，否则还原默认。
+static func apply_palette(colorblind: bool) -> void:
+	COLORBLIND = colorblind
+	if colorblind:
+		OK      = map_color(_C_OK)
+		BAD     = map_color(_C_BAD)
+		WARN    = map_color(_C_WARN)
+		BG      = _C_BG
+		BG_SOFT = _C_BG_SOFT
+		PANEL   = _C_PANEL
+		PANEL_HI = _C_PANEL_HI
+		LINE    = _C_LINE
+		LINE_HI = _C_LINE_HI
+		TEXT    = _C_TEXT
+		MUTED   = _C_MUTED
+		ACCENT  = _C_ACCENT
+		ACCENT2 = _C_ACCENT2
+	else:
+		BG      = _C_BG
+		BG_SOFT = _C_BG_SOFT
+		PANEL   = _C_PANEL
+		PANEL_HI = _C_PANEL_HI
+		LINE    = _C_LINE
+		LINE_HI = _C_LINE_HI
+		TEXT    = _C_TEXT
+		MUTED   = _C_MUTED
+		ACCENT  = _C_ACCENT
+		ACCENT2 = _C_ACCENT2
+		WARN    = _C_WARN
+		OK      = _C_OK
+		BAD     = _C_BAD
+
+## 设置界面字号缩放（0.85 ~ 1.6），下一个界面重建周期生效。
+static func set_scale(s: float) -> void:
+	SIZE_SCALE = clampf(s, 0.85, 1.6)
+
+## 字号缩放工具：保持各标签之间的相对层级关系。界面里任何硬编码字号都应经此换算。
+static func fs(size: int) -> int:
+	return int(round(float(size) * SIZE_SCALE))
 
 static func sb(bg: Color, radius := 8, border := Color(0, 0, 0, 0), border_w := 1) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
@@ -41,7 +132,7 @@ static func make_theme() -> Theme:
 		"Noto Sans SC", "Source Han Sans SC", "SimHei", "Arial",
 	])
 	t.default_font = f
-	t.default_font_size = 14
+	t.default_font_size = fs(14)
 
 	t.set_stylebox("normal", "Button", sb(PANEL_HI, 8, LINE))
 	t.set_stylebox("hover", "Button", sb(Color("#243049"), 8, LINE_HI))
@@ -69,10 +160,10 @@ static func make_theme() -> Theme:
 	t.set_stylebox("grabber_highlight", "VScrollBar", sb(Color("#42536E"), 4))
 	return t
 
-static func label(text: String, size := 14, color := TEXT, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+static func label(text: String, size := 14, color := _C_TEXT, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", fs(size))
 	l.add_theme_color_override("font_color", color)
 	l.horizontal_alignment = align
 	return l
@@ -102,7 +193,7 @@ static func btn(text: String, primary := false, min_w := 0) -> Button:
 		b.custom_minimum_size.x = min_w
 	return b
 
-static func panel(bg := PANEL, radius := 10, border := LINE) -> PanelContainer:
+static func panel(bg := _C_PANEL, radius := 10, border := _C_LINE) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", sb(bg, radius, border))
 	return p
@@ -125,7 +216,7 @@ static func tier_badge(tier: int) -> Label:
 	box.add_theme_constant_override("line_spacing", 2)
 	return l
 
-static func chip(text: String, color := ACCENT, size := 11) -> Label:
+static func chip(text: String, color := _C_ACCENT, size := 11) -> Label:
 	var l := label(text, size, color)
 	l.add_theme_stylebox_override("normal", sb(Color(color.r, color.g, color.b, 0.14), 5, Color(color.r, color.g, color.b, 0.5)))
 	return l
@@ -218,7 +309,7 @@ static func _load_icon(key: String) -> Texture2D:
 	return tex
 
 ## 检视属性条：名称 + 数值 + 评级 + 进度条（0~100），用于物品档案面板
-static func attr_bar(name: String, value: float, color := ACCENT) -> Control:
+static func attr_bar(name: String, value: float, color := _C_ACCENT) -> Control:
 	var v := vbox(3)
 	var h := hbox(6)
 	var nl := label(name, 11, MUTED)
@@ -264,7 +355,7 @@ static func ratio_bar(segments: Array, width := 300, height := 14) -> Control:
 		if v <= 0.0:
 			continue
 		var seg := Panel.new()
-		seg.add_theme_stylebox_override("panel", sb(Color(str(s.get("color", "#FFFFFF"))), 3))
+		seg.add_theme_stylebox_override("panel", sb(map_color_html(str(s.get("color", "#FFFFFF"))), 3))
 		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		seg.size_flags_stretch_ratio = v / total
 		seg.tooltip_text = "%s %.1f%%" % [str(s.get("label", "")), v / total * 100.0]
@@ -330,7 +421,7 @@ static func fade_in(node: Control, dur := 0.16) -> void:
 	tw.tween_property(node, "modulate:a", 1.0, dur)
 
 ## 飘字：从 global_pos 处向上飘并淡出，播完自动回收。host 需为 Control（悬浮层建议直接挂视图根）。
-static func float_text(host: Control, global_pos: Vector2, text: String, color := TEXT, size := 15) -> void:
+static func float_text(host: Control, global_pos: Vector2, text: String, color := _C_TEXT, size := 15) -> void:
 	if not host.is_inside_tree():
 		return
 	var l := label(text, size, color)
