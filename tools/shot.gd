@@ -15,6 +15,7 @@ func _ready() -> void:
 	var variant := ""
 	var show_onboarding := false
 	var want_share := false
+	var seed_codex := false
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--view="):
 			view = a.substr(7)
@@ -25,6 +26,9 @@ func _ready() -> void:
 		elif a == "--share":
 			# 在设置页填一段真实分享码（内存态，不执行导入、不写存档）
 			want_share = true
+		elif a == "--codex":
+			# 直接铺满图鉴与归档台账（内存态，不触发自动发放、不写存档），用于核对归档行与全收集徽标
+			seed_codex = true
 		elif a == "--onboarding":
 			# 强制展示新手引导浮层（默认抑制，避免挡住目标页 / 各视图的截图核对）
 			show_onboarding = true
@@ -45,6 +49,14 @@ func _ready() -> void:
 	if seed_all:
 		for id in GameData.item_order:
 			GameState.add_item(str(id), 3)
+	if seed_codex:
+		# 直接写内存（不 emit、不 save）：图鉴全收录 + 台账全归档，展示归档行的「已归档」态
+		for id in GameData.item_order:
+			GameState.codex[str(id)] = true
+			GameState.inventory[str(id)] = { "n": 1, "cs": 100.0 }
+		for m in CodexRewards.defs():
+			GameState.codex_rewards[str(m.get("id", ""))] = true
+		variant += "_codex"
 
 	var out_dir := OS.get_environment("TEMP").path_join("scrap_shot")
 	DirAccess.make_dir_recursive_absolute(out_dir)

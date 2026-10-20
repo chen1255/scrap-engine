@@ -1,0 +1,34 @@
+{
+  "_note": "图鉴归档里程碑：达成即自动发放，台账写存档防重复；旧档已达成不追溯补发（只静默记台账）。数据驱动：规则与奖励都写在这里，不改代码即可调整金额或新增里程碑。",
+  "_total": { "mech": 14, "bio": 14, "data": 14, "all": 42 },
+  "milestones": [
+    {
+      "id": "archive_mech",
+      "name": "机械族 · 归档",
+      "desc": "收齐机械族全部收集品",
+      "rule": { "type": "codex_family_all", "family": "mech" },
+      "reward": { "credits": 1200, "energy": 2 }
+    },
+    {
+      "id": "archive_bio",
+      "name": "生物族 · 归档",
+      "desc": "收齐生物族全部收集品",
+      "rule": { "type": "codex_family_all", "family": "bio" },
+      "reward": { "credits": 1200, "energy": 2 }
+    },
+    {
+      "id": "archive_data",
+      "name": "数据族 · 归档",
+      "desc": "收齐数据族全部收集品",
+      "rule": { "type": "codex_family_all", "family": "data" },
+      "reward": { "credits": 1200, "energy": 2 }
+    },
+    {
+      "id": "archive_all",
+      "name": "轨道回收协议",
+      "desc": "收齐全部 42 件收集品",
+      "rule": { "type": "codex_count", "found": 42 },
+      "reward": { "credits": 6000, "energy": 6 }
+    }
+  ]
+}

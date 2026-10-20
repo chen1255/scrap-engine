@@ -2,7 +2,7 @@
 
 > 赛博废料回收 · 全息拆解 · 概率晋升
 
-一款以「爆率」为核心的单机收集类小型游戏：在轨道坟场的黑市开盲盒、拆解残骸提纯材料、把同族同阶的 5 件材料投进熔炉赌一次晋升，最后在图鉴里补齐 42 件收集品。
+一款以「爆率」为核心的单机收集类小型游戏：在轨道坟场的黑市开盲盒、拆解残骸提纯材料、把同族同阶的 5 件材料投进熔炉赌一次晋升，最后在图鉴里补齐 42 件收集品并完成全部归档。
 
 Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon 时自动降级、离线照常可玩
 
@@ -46,6 +46,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 存档分享码 | 设置页把当前进度导出成一段 `SCRAP9:…` 分享码（gzip + base64 + 校验和），复制到另一台机器 / 另一个槽位粘贴即可还原；导入前需勾选覆盖确认，任何校验不过都**拒绝且不写入** |
 | 目标 | 侧栏「目标」页：16 条作业目标（`data/goals.json`），达成条件用 7 种规则类型描述，与成就共用同一套判定引擎；达成后手动领取奖励（信用点 / 体力 / 物品），可领取时导航项与卡片同步高亮 |
 | 成就奖励 | 19 条成就（`data/achievements.json`）**解锁即自动发放**奖励（`data/achievement_rewards.json`，仅信用点 / 体力），发放台账写入存档防重复；成就页按 JSON 顺序三等分展示分档进度、奖励预览与「已发放」标记。与目标相反：成就自动发奖、目标手动领取 |
+| 图鉴归档 | 收齐某族系 14 件 / 收齐全图鉴 42 件即**自动发放归档津贴**（₡1200 + ⚡2 / ₡6000 + ⚡6，合计 ₡9600 + 12 体力）；判定复用 `Rules` 的 `codex_family_all` / `codex_count`，台账写存档防重复，旧档已达成不追溯补发；图鉴页顶部展示 4 张归档卡与「全收集」徽标 |
 | 新手引导 | 5 步教练卡（`data/onboarding.json`）：每步 = 一句说明 + 对应视图 + 可选的推进规则，满足规则或点「下一步」即推进，全程可「跳过引导」；进度写进存档，只对真正的新档弹一次 |
 
 ### 数据规模
@@ -64,6 +65,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 目标 | 16（7 类达成规则：次数 / 信用点 / 图鉴收录 / 族系收齐 / 持有阶次 / 校准器等级 / 校准器满级） |
 | 成就 | 19（条件规则数据驱动；解锁即自动发放奖励，台账防重复） |
 | 成就奖励 | 19（`data/achievement_rewards.json`，合计约 ₡10670 + 6 体力，仅信用点 / 体力） |
+| 图鉴归档里程碑 | 4（3 族系收齐 + 全收集，合计 ₡9600 + 12 体力） |
 | 引导步骤 | 5 |
 
 所有数值均为纯数据驱动，改 JSON 即改玩法，无需碰代码。
@@ -82,6 +84,7 @@ scrap-engine/
 │   ├── recipes.json         #   晋升配方、道具、校准器、维修台（精修 / 翻新）、核心催化
 │   ├── achievements.json    #   19 条成就定义（条件规则数据驱动）
 │   ├── achievement_rewards.json # 19 条成就的奖励映射（成就 id → 信用点 / 体力；解锁即自动发放）
+│   ├── codex_rewards.json   #   4 条图鉴归档里程碑（族系收齐 / 全收集 → 自动发放归档津贴）
 │   ├── goals.json           #   16 条目标定义（与成就共用同一套规则引擎）
 │   ├── onboarding.json      #   5 步新手引导：说明 + 目标视图 + 推进规则
 │   ├── traits.json          #   词条池
@@ -92,7 +95,7 @@ scrap-engine/
 ├── scenes/
 │   └── main.tscn            # 唯一主场景
 ├── scripts/
-│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Rules / Objectives / Onboarding / Settings / Sfx / Bgm / Achievements / SteamService
+│   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Rules / Objectives / Onboarding / Settings / Sfx / Bgm / Achievements / CodexRewards / SteamService
 │   ├── share_code.gd        # 存档分享码编解码（class_name ShareCode：gzip + base64 + 校验和，纯静态）
 │   └── ui/                  # 主界面、10 个视图、全息检视面板、新手引导浮层、UI 组件库（含动效原语）
 ├── shaders/                 # 全息卡片与全息图标着色器
@@ -100,7 +103,7 @@ scrap-engine/
 │   ├── icons/               # 43 张 512×512 透明物品图标（含「未知」占位）
 │   ├── audio/               # 17 段音效 + 3 段循环 BGM + 1 段环境音（由 tools/gen_sfx.gd、tools/gen_bgm.gd 生成）
 │   └── branding/            # 应用图标（png + 多尺寸 ico）
-├── tests/                   # headless 自测：概率（sim_rates）/ Steam（sim_steam）/ 设置与音频（sim_settings）/ 目标与引导（sim_goals）/ 存档分享码（sim_share）
+├── tests/                   # headless 自测：概率（sim_rates）/ Steam（sim_steam）/ 设置与音频（sim_settings）/ 目标与引导（sim_goals）/ 存档分享码（sim_share）/ 图鉴归档（sim_codex）
 └── tools/                   # 开发期工具：图标烘焙、音效 / BGM 合成、视图截图、Steam addon 拉取
 ```
 
@@ -147,8 +150,8 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 
 - **导出** —— 「生成分享码」把当前槽位的完整存档编码成一段文本：`SCRAP9:<存档版本>:<校验和>:<gzip 压缩后的 base64>`。JSON 紧凑无缩进 + gzip 压缩，整段通常 0.5~1.4 KB，只读文本框自动换行并可整段复制；旁边显示字符数与一行摘要（₡ / ⚡ / 物品数 / 图鉴进度）。
 - **导入** —— 把码粘进输入框（**折行、空格都会被忽略**，聊天工具折行粘贴也能用），勾选「我确认覆盖当前槽位存档」后按钮才可用，点击即还原到**当前槽位**。导入走的是与读档**同一份字段映射**（`GameState._apply_dict`），落盘后照常广播刷新 HUD / 各视图 / 成就评估。
-- **先校验、后解压、绝不半写入** —— 前缀、段数、base64 字符集、gzip 魔数、校验和（压缩载荷 sha256 前 16 位）、JSON 结构、字段类型、版本逐层把关；任何一层不过都返回中文原因（如「分享码校验不通过（内容可能被改动或被截断）」「分享码来自更高版本（v5），请先更新游戏」）并**放弃写入**，坏码不会污染任何槽位。
-- **与槽位无关** —— 快照里不含槽位号，槽 1 导出的码可以导入槽 2/3；存档格式与文件名一字未改，`version` 仍是 4，既有存档、云存档与四个既有自测全部逐位照旧。
+- **先校验、后解压、绝不半写入** —— 前缀、段数、base64 字符集、gzip 魔数、校验和（压缩载荷 sha256 前 16 位）、JSON 结构、字段类型、版本逐层把关；任何一层不过都返回中文原因（如「分享码校验不通过（内容可能被改动或被截断）」「分享码来自更高版本（v6），请先更新游戏」）并**放弃写入**，坏码不会污染任何槽位。
+- **与槽位无关** —— 快照里不含槽位号，槽 1 导出的码可以导入槽 2/3；存档文件名一字未改，存档版本随功能升级（阶段十起 `version` = 5，码里自动携带图鉴归档台账），既有存档与云存档照旧可读。
 - **隐私提示** —— 分享码就是存档的明文（只是压缩编码，没有加密），面板上直接写明「请勿公开贴出」。
 
 ### 目标与新手引导
@@ -165,7 +168,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 | `calibrator_level` | 概率校准器升到指定等级 |
 | `calibrator_max` | 概率校准器满级 |
 
-达成后到「目标」页点「领取奖励」发放奖励（信用点 / 体力 / 物品），奖励总量约 ₡6550 + 6 体力 + 2 件 T1 材料；可领取时导航项显示 `● n` 计数，卡片按「可领取 / 推荐下一步 / 进行中 / 已完成」四态区分。目标与领取状态都写进存档（存档 `version` 4），换槽 / 重载 / 云存档都跟着走。
+达成后到「目标」页点「领取奖励」发放奖励（信用点 / 体力 / 物品），奖励总量约 ₡6550 + 6 体力 + 2 件 T1 材料；可领取时导航项显示 `● n` 计数，卡片按「可领取 / 推荐下一步 / 进行中 / 已完成」四态区分。目标与领取状态都写进存档（存档 `version` 5），换槽 / 重载 / 云存档都跟着走。
 
 **新手引导** —— 5 步教练卡，定义在 `data/onboarding.json`：每步 = 一句说明 + 要看的视图 + 可选的「推进规则」（规则类型与目标完全一致）。
 
@@ -215,6 +218,17 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 - **台账防重复** —— 已发放的成就记进存档新增字段 `achievement_rewards`（成就 id → 本次**实发摘要** `{ credits, energy, items }`），发放逻辑幂等，重复评估绝不重复发奖；成就页概览那行「已发放奖励」因此按**实到数额**合计，被体力上限吞掉的部分不计入、不虚报（旧档遗留的 `true` 值无实发数额，回退按声明值计）；隐藏成就、旧档兼容、换槽 / 重载 / 云存档都跟着走（存档 `version` 3 → 4，新字段缺省为空字典，旧档安全）。
 
 > 说明：老档中**在阶段八之前就已解锁**的成就视为「已结算」，不追溯补发奖励——保证读档行为与既有版本逐位一致（不会在读档时凭空多出一笔钱）。此后新解锁的成就正常即时发放。
+
+### 图鉴归档里程碑
+
+在阶段十之前，图鉴收齐 42 件只意味着最后一行数字变成 `42 / 42`：没有奖励，也没有终点。**图鉴归档**把「集齐」变成一次真正的归档：
+
+- **四条里程碑** —— 三个族系各一条（收齐该族 14 件 → ₡1200 + ⚡2），加一条全收集「轨道回收协议」（42/42 → ₡6000 + ⚡6），合计 ₡9600 + 12 体力。全部写在新增的 `data/codex_rewards.json`，改 JSON 即可调整金额或新增里程碑；`items / rarities / loot_tables / achievements / goals / market / recipes / traits.json` 一字不改。
+- **判定复用 `Rules`** —— 规则类型只用既有的 `codex_family_all`（族系收齐）与 `codex_count`（收录件数），不新增规则类型，与目标 / 成就共用同一套语义，判定永远不会漂移。
+- **达成即自动发放** —— 新 autoload `CodexRewards` 监听 `GameState.codex_changed`，逐条评估并调用 `GameState.grant_reward()`。奖励只发信用点与体力；体力受上限钳制，toast 按**实到**数额播报并标注「体力已满，⚡未到账」。发放台账 `codex_rewards` 写入存档防重复，同一里程碑只发一次。
+- **旧档不追溯** —— 读档 / 切槽 / 导入分享码后，已达成但台账缺失的里程碑只**静默记账、不发奖**（与阶段八成就奖励同一先例），升级版本不会在读档瞬间凭空多出一笔钱。
+- **图鉴页状态** —— 图鉴页顶部新增一行 4 张归档卡（名称 / 进度 / 归档津贴 / 已归档·进行中），全收集时标题旁出现「全收集」徽标；达成时主控台弹 toast，全部归档再播报一次终局。
+- **存档版本** —— `version` 4 → 5（新字段 `codex_rewards` 缺省为空字典，旧档安全）；分享码整包携带台账，跨机导入不会重复领奖。
 
 ### Steam 集成（可选）
 
@@ -267,6 +281,12 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_goals.
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_share.tscn
 ```
 
+图鉴归档自测（4 条里程碑数据 / 复用 `Rules` 判定 / 达成即自动发放与幂等 / 全收集终局与体力上限实到记账 / 存档 `version` 5 往返 / 旧档不追溯补发 / 分享码携带台账 / 图鉴页归档行与全收集徽标）：
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_codex.tscn
+```
+
 ### 打包 Windows 构建
 
 ```powershell
@@ -288,6 +308,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 | 阶段七 | 词条玩法闭环：把 24 条「只在检视面板展示」的词条按既有描述语义接进玩法（晋升成功率 / 精修 / 翻新 / 拆解产出 / 售出价格 五处修正），效果映射表写在新增 `data/trait_effects.json`，`traits.json` 一字不改，无词条时逐位不变 | 完成 |
 | 阶段八 | 成就奖励闭环：19 条成就解锁即自动发放奖励（新增 `data/achievement_rewards.json`，仅信用点 / 体力），多轮评估兜底连锁解锁，成就页按 JSON 顺序三等分做分档进度 + 奖励预览 + 已发放标记，存档加发放台账防重复（`version` 4）；`achievements.json` 一字不改，无奖励时逐位不变 | 完成 |
 | 阶段九 | 存档分享码：设置页把当前进度导出成 `SCRAP9:…` 文本（gzip + base64 + 校验和），可在另一台机器 / 另一个槽位粘贴还原；解码先校验后解压，失败一律拒绝且不写入，导入需勾选覆盖确认。新增 `scripts/share_code.gd` 与 `tests/sim_share`，存档格式 / 文件名 / 既有四个自测逐位不变 | 完成 |
+| 阶段十 | 图鉴归档里程碑：三族系收齐各发 ₡1200 + ⚡2、全收集「轨道回收协议」发 ₡6000 + ⚡6（合计 ₡9600 + 12 体力）。新增 `data/codex_rewards.json` 与 `CodexRewards` autoload，判定复用既有 `Rules`，台账写存档防重复、旧档不追溯；图鉴页新增 4 张归档卡与「全收集」徽标；存档 `version` 4 → 5，新增 `tests/sim_codex` | 完成 |
 
 开发期截图工具（需要渲染设备，不能 `--headless`）：
 
@@ -295,7 +316,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 Godot_v4.7.2-stable_win64.exe --path . res://tools/shot.tscn -- --view=inventory --seed
 ```
 
-`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / goals / steam / settings`，`--inspect=<item_id>` 可直接打开全息检视面板；另有 `--colorblind`（色盲配色）、`--font-scale=<x>`（字号缩放）、`--onboarding`（强制展示新手引导浮层）与 `--share`（设置页填入一段真实分享码）用于核对设置、引导与分享码面板的效果。
+`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / goals / steam / settings`，`--inspect=<item_id>` 可直接打开全息检视面板；另有 `--colorblind`（色盲配色）、`--font-scale=<x>`（字号缩放）、`--onboarding`（强制展示新手引导浮层）、`--share`（设置页填入一段真实分享码）与 `--codex`（内存态铺满图鉴与归档台账，核对归档行与全收集徽标，不写存档）用于核对各面板的实际效果。
 
 ### 许可
 
@@ -305,7 +326,7 @@ MIT License，见 [LICENSE](LICENSE)。
 
 ## English
 
-**Scrap Engine** is a small, single-player collection game built around drop-rate gambling. Open unidentified crates at the orbital graveyard black market, disassemble wrecks into materials, feed five same-family same-tier materials into the furnace for a single probability-driven promotion roll, and complete all 42 collectibles in the codex.
+**Scrap Engine** is a small, single-player collection game built around drop-rate gambling. Open unidentified crates at the orbital graveyard black market, disassemble wrecks into materials, feed five same-family same-tier materials into the furnace for a single probability-driven promotion roll, and complete all 42 collectibles in the codex to archive it.
 
 Built with Godot 4.7.2 / GDScript, with optional built-in Steam integration — it degrades gracefully and runs fully offline when Steam or the addon is absent.
 
@@ -343,6 +364,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Save share code | The Settings view exports the current progress as a `SCRAP9:…` share code (gzip + base64 + checksum) that can be pasted on another machine or into another slot; importing requires a confirmation tick and **refuses to write anything** whenever any check fails |
 | Goals | A "Goals" view: 16 objectives (`data/goals.json`) described by 7 rule types, sharing **one rules engine with the Steam achievements**; rewards (credits / energy / items) are claimed manually, and the nav item flags what is claimable |
 | Achievement rewards | 19 achievements (`data/achievements.json`) **auto-pay their reward on unlock** (`data/achievement_rewards.json`, credits / energy only), with a payout ledger that records each achievement's **actual paid-out amounts** to prevent duplicates — so the page summary sums what really landed and never overstates energy swallowed by the cap (legacy `true` entries carry no amounts and fall back to the declared value); the achievements page splits them into three bands (JSON order) showing tiered progress, reward previews, and a "paid" mark. The mirror image of goals: achievements pay automatically, goals are claimed by hand |
+| Codex archiving | Completing a family's 14 items or the full 42-item codex **auto-pays an archive bonus** (₡1200 + ⚡2 per family / ₡6000 + ⚡6 for all, ₡9600 + 12 energy total). Checks reuse `Rules` (`codex_family_all` / `codex_count`), a ledger in the save prevents duplicates, and milestones already met by an older save are settled silently without retroactive payouts; the codex view shows four archive cards plus a "complete" badge |
 | Onboarding | A 5-step coach card (`data/onboarding.json`): each step is a line of text + a target view + an optional advance rule, advanced either by the rule or by "Next", and skippable at any point; progress is saved and only ever shown to a genuinely new save |
 
 | Content | Count |
@@ -359,6 +381,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Goals | 16 (7 rule types: counters / credits / codex count / family complete / own tier / calibrator level / calibrator maxed) |
 | Achievements | 19 (rule-driven; reward paid automatically on unlock, ledger-guarded against duplicates) |
 | Achievement rewards | 19 (`data/achievement_rewards.json`; roughly ₡10670 + 6 energy total, credits / energy only) |
+| Codex archive milestones | 4 (3 families + full collection, ₡9600 + 12 energy total) |
 | Onboarding steps | 5 |
 
 Everything is data-driven: change the JSON, change the game — no code edits needed.
@@ -403,8 +426,8 @@ Progress used to live only in the three `user://scrap_engine_save*.json` slot fi
 
 - **Export** — "Generate share code" encodes the current slot's full save as one line of text: `SCRAP9:<save version>:<checksum>:<gzip-compressed base64>`. Compact JSON plus gzip keeps the whole code around 0.5–1.4 KB; the read-only box wraps it automatically and it can be copied in one go. Next to it you get the character count and a one-line summary (₡ / ⚡ / item count / codex progress).
 - **Import** — Paste the code into the input box (**line breaks and spaces are ignored**, so wrapped chat messages work too), tick "I confirm overwriting the current slot's save" to enable the button, then click to restore into the **current slot**. Importing reuses **the exact same field mapping as loading a save** (`GameState._apply_dict`) and broadcasts the usual refresh signals afterwards, so the HUD, views, and achievement evaluation react just like a slot switch.
-- **Validate first, decompress later, never half-write** — Prefix, segment count, base64 alphabet, gzip magic, checksum (first 16 hex chars of the compressed payload's sha256), JSON structure, field types, and version are checked in order; any failure returns a readable reason (e.g. "checksum mismatch — the code may have been edited or truncated", "the code comes from a newer version (v5), please update first") and **abandons the write**, so a broken code can never contaminate a slot.
-- **Slot-independent** — The snapshot carries no slot number, so a code exported from slot 1 imports into slots 2/3. The save format and filenames are untouched (`version` stays 4), so existing saves, cloud saves, and all four existing self-tests remain bit-for-bit identical.
+- **Validate first, decompress later, never half-write** — Prefix, segment count, base64 alphabet, gzip magic, checksum (first 16 hex chars of the compressed payload's sha256), JSON structure, field types, and version are checked in order; any failure returns a readable reason (e.g. "checksum mismatch — the code may have been edited or truncated", "the code comes from a newer version (v6), please update first") and **abandons the write**, so a broken code can never contaminate a slot.
+- **Slot-independent** — The snapshot carries no slot number, so a code exported from slot 1 imports into slots 2/3. Save filenames are untouched; the save version follows feature upgrades (as of stage ten `version` = 5, and the code carries the codex archive ledger automatically), while existing saves and cloud saves stay readable.
 - **Privacy note** — A share code *is* your save in plaintext (compressed, not encrypted); the panel says so outright: don't post it publicly.
 
 ### Goals & onboarding
@@ -421,7 +444,7 @@ Progress used to live only in the three `user://scrap_engine_save*.json` slot fi
 | `calibrator_level` | Probability calibrator at a given level |
 | `calibrator_max` | Probability calibrator maxed out |
 
-Completed objectives are paid out with the "Claim" button on the Goals view (credits / energy / items — roughly ₡6550 + 6 energy + 2 T1 materials in total), and while anything is claimable the nav item carries a `● n` counter. Objective and claim state is saved (save `version` 4), so it travels with slot switching, reloads, and cloud saves.
+Completed objectives are paid out with the "Claim" button on the Goals view (credits / energy / items — roughly ₡6550 + 6 energy + 2 T1 materials in total), and while anything is claimable the nav item carries a `● n` counter. Objective and claim state is saved (save `version` 5), so it travels with slot switching, reloads, and cloud saves.
 
 **Onboarding** — a 5-step coach card defined in `data/onboarding.json`: each step is a line of text + a view to look at + an optional advance rule (same rule types as the goals).
 
@@ -460,6 +483,17 @@ Each item's traits are **deterministically derived** by `GameData.item_traits()`
 - **Bit-for-bit identical by default** — all five consumption points are written so the formula is an identity when the effect is 0 (×1.0 / +0 / `clampi(x+0)`); an item with no traits (or zero effects) behaves exactly like the previous build, backed by dedicated control assertions in `sim_rates`.
 - **Visible in the UI** — the holographic inspector annotates each trait with "Effect: …" and colors it by sign; the furnace odds table shows the material trait multiplier; the repair bench shows the repair/refurbish trait bonus; the exchange sell price automatically includes the trait multiplier.
 
+### Codex archiving
+
+Before stage ten, collecting all 42 items only turned the last counter into `42 / 42`: no reward, no ending. **Codex archiving** turns completion into an actual archive:
+
+- **Four milestones** — one per family (all 14 items → ₡1200 + ⚡2) plus a full-collection "Orbital Recovery Protocol" (42/42 → ₡6000 + ⚡6), ₡9600 + 12 energy in total. Everything lives in the new `data/codex_rewards.json`, so changing the JSON retunes amounts or adds milestones; `items / rarities / loot_tables / achievements / goals / market / recipes / traits.json` are untouched.
+- **Reuses `Rules`** — only the existing `codex_family_all` and `codex_count` types are used. No new rule type, and the same semantics as goals and achievements, so checks can never drift.
+- **Auto-payout on completion** — a new `CodexRewards` autoload listens to `GameState.codex_changed`, evaluates each milestone, and calls `GameState.grant_reward()`. Rewards are credits and energy only; energy is capped, so the toast reports the **actual** amount that landed and marks "energy full, ⚡ not credited". A `codex_rewards` ledger in the save prevents duplicates, so each milestone pays exactly once.
+- **No retroactive payouts** — after loading, switching slots, or importing a share code, milestones that are already met but missing from the ledger are **settled silently without paying** (the same precedent as stage eight's achievement rewards), so upgrading never conjures money on load.
+- **Codex view** — four archive cards at the top of the codex view (name / progress / archive bonus / archived·in progress) plus a "complete" badge once all 42 are collected; each payout raises a toast, and finishing everything broadcasts a one-time finale.
+- **Save version** — `version` 4 → 5 (the new `codex_rewards` field defaults to an empty dictionary, so old saves stay safe); share codes carry the ledger, so importing on another machine never pays twice.
+
 ### Drop-rate self-test
 
 Verifies that the actual distributions match the configured rates for the black-market drops, the promotion draws, and the refurbish draws, and asserts that precision repairs are deterministic (4 crates × 20,000 opens, 12 promotion groups × 1,500 draws, refurbish × 3,000). It also carries **core catalyst** assertions: the bonus converts to 15 weight points, total weight is conserved, the transfer comes precisely out of `damage + breakdown`, the odds table is bit-for-bit identical when no core is invested, and each promotion consumes exactly one core; plus **trait gameplay** assertions: trait effects are reproducible per item type, the promotion `success` weight scales by the material trait multiplier (the other three weights unchanged), precision repair / refurbish / disassembly / sell price are adjusted exactly, and everything is bit-for-bit identical when no trait applies. Prints `[PASS]` and exits with code 0 on success:
@@ -490,6 +524,12 @@ Save share code self-test (field-for-field encode round-trip / prefix & checksum
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_share.tscn
+```
+
+Codex archive self-test (the 4 milestone definitions / rule reuse / auto-payout on completion and idempotence / full-collection finale with energy-cap actual-amount accounting / save `version` 5 round-trip / no retroactive payouts on old saves / share codes carrying the ledger / archive row and completion badge on the codex view):
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_codex.tscn
 ```
 
 ### Building for Windows

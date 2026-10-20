@@ -64,6 +64,8 @@ func _connect_systems() -> void:
 	Objectives.goal_completed.connect(_on_goal_completed)
 	Objectives.goals_changed.connect(_refresh_goals_badge)
 	Achievements.achievement_unlocked.connect(_on_achievement_unlocked)
+	CodexRewards.milestone_archived.connect(_on_codex_milestone)
+	CodexRewards.all_archived.connect(_on_codex_all_archived)
 	Onboarding.step_changed.connect(_on_onboarding_step)
 	Onboarding.finished.connect(_on_onboarding_finished)
 
@@ -77,6 +79,8 @@ func _disconnect_systems() -> void:
 	Objectives.goal_completed.disconnect(_on_goal_completed)
 	Objectives.goals_changed.disconnect(_refresh_goals_badge)
 	Achievements.achievement_unlocked.disconnect(_on_achievement_unlocked)
+	CodexRewards.milestone_archived.disconnect(_on_codex_milestone)
+	CodexRewards.all_archived.disconnect(_on_codex_all_archived)
 	Onboarding.step_changed.disconnect(_on_onboarding_step)
 	Onboarding.finished.disconnect(_on_onboarding_finished)
 
@@ -628,3 +632,20 @@ func _on_achievement_unlocked(id: String, def: Dictionary, got: Dictionary) -> v
 	show_toast(msg)
 	if _current == "steam" and _views.has("steam") and (_views["steam"] as Control).has_method("refresh"):
 		_views["steam"].refresh()
+
+## 图鉴归档里程碑（阶段十）：达成即自动发放，播报归档名与实到奖励。
+func _on_codex_milestone(id: String, def: Dictionary, got: Dictionary) -> void:
+	var msg := "图鉴归档：%s" % str(def.get("name", id))
+	if not got.is_empty():
+		msg += " · 奖励 " + GameState.reward_text(got)
+		if int(def.get("reward", {}).get("energy", 0)) > int(got.get("energy", 0)):
+			msg += "（体力已满，⚡未到账）"
+	show_toast(msg)
+	Sfx.play("trade")
+	if _views.has("codex") and (_views["codex"] as Control).has_method("refresh"):
+		_views["codex"].refresh()
+
+## 全部归档（含全收集）：终局播报，只在本局首次全部达成时触发。
+func _on_codex_all_archived() -> void:
+	Sfx.play("promote_success")
+	show_toast("轨道回收协议已完成 —— 图鉴 42/42，全部归档。")

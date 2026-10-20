@@ -30,6 +30,7 @@ Settings="*res://scripts/autoload/settings.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
 Bgm="*res://scripts/autoload/bgm.gd"
 Achievements="*res://scripts/autoload/achievements.gd"
+CodexRewards="*res://scripts/autoload/codex_rewards.gd"
 SteamService="*res://scripts/autoload/steam_service.gd"
 
 [steam]

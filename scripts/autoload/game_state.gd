@@ -10,7 +10,7 @@ signal saved()   # 存档写入成功后触发，供云存档自动上传等外�
 signal slot_changed(slot: int)   # 切换存档槽位后触发
 
 const SAVE_PATH := "user://scrap_engine_save.json"   # 槽 1 的路径（历史存档，保持兼容）
-const SAVE_VERSION := 4                              # 存档格式版本（写入 to_dict，供分享码 / 旧档兼容判定）
+const SAVE_VERSION := 5                              # 存档格式版本（写入 to_dict，供分享码 / 旧档兼容判定）
 const SLOT_COUNT := 3
 const START_CREDITS := 600
 const START_ENERGY := 12
@@ -24,6 +24,7 @@ var inventory: Dictionary = {}        # item_id -> { "n": 数量, "cs": 保养�
 var codex: Dictionary = {}            # item_id -> true 表示已发现
 var achievements: Dictionary = {}     # achievement_id -> true 表示已解锁（本地权威）
 var achievement_rewards: Dictionary = {}   # achievement_id -> 本次「实发」摘要 { credits, energy, items }（阶段八台账，防重复；旧档可能遗留 true）
+var codex_rewards: Dictionary = {}          # 图鉴归档里程碑 id -> true（阶段十台账，防重复发放）
 var goals: Dictionary = {}            # goal_id -> { "done": true, "claimed": true }
 var tutorial: Dictionary = { "done": false, "step": 0 }   # 新手引导：是否已完成 / 当前步骤
 var calibrator_level: int = 0         # 概率校准器等级
@@ -48,6 +49,7 @@ func reset_new_game() -> void:
 	codex.clear()
 	achievements.clear()
 	achievement_rewards.clear()
+	codex_rewards.clear()
 	goals.clear()
 	# 注意：tutorial 不在此清除 —— 引导只对「真正的新档」弹一次，重置存档不重复打扰。
 	pity.clear()
@@ -339,6 +341,7 @@ func to_dict() -> Dictionary:
 		"codex": codex,
 		"achievements": achievements,
 		"achievement_rewards": achievement_rewards,
+		"codex_rewards": codex_rewards,
 		"goals": goals,
 		"tutorial": tutorial,
 		"calibrator_level": calibrator_level,
@@ -376,6 +379,7 @@ func _apply_dict(d: Dictionary) -> void:
 	codex = d.get("codex", {})
 	achievements = d.get("achievements", {})   # 旧存档（version 1）缺该字段时按空字典兼容
 	achievement_rewards = d.get("achievement_rewards", {})   # 旧存档（version < 4）缺该字段时按空字典兼容
+	codex_rewards = d.get("codex_rewards", {})               # 旧存档（version < 5）缺该字段时按空字典兼容
 	goals = d.get("goals", {})                 # 旧存档缺 goals / tutorial 时按空值兼容
 	var tut: Variant = d.get("tutorial", {})
 	tutorial = tut if typeof(tut) == TYPE_DICTIONARY else { "done": false, "step": 0 }

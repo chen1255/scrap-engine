@@ -19,6 +19,7 @@ var repair_cfg: Dictionary = {}       # 维修台：精修参数与翻新抽签
 var market_cfg: Dictionary = {}       # 交易所配置
 var trait_pools: Dictionary = {}      # family id -> Array[词条]
 var trait_effects: Dictionary = {}    # 词条名 -> 玩法效果（promote / repair / refurbish / disassemble / sell）
+var codex_rewards: Array = []         # 图鉴归档里程碑（阶段十：达成即自动发放）
 var conditions: Array = []            # 保养度（品相）分档，按 min 从高到低
 var cond_roll: Dictionary = {}        # 开箱保养度取值范围
 var family_ordinal: Dictionary = {}   # item id -> 该物品在本族系中的序号（用于确定性抽词条）
@@ -65,6 +66,9 @@ func _load_all() -> void:
 	repair_cfg = recipes.get("repair", {})
 
 	market_cfg = _read_json("res://data/market.json")
+
+	# 图鉴归档里程碑（阶段十新增，独立文件；缺失时为空数组，图鉴回归「只展示不收奖」）
+	codex_rewards = _read_json("res://data/codex_rewards.json").get("milestones", [])
 
 func _read_json(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):

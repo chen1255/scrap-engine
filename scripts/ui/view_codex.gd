@@ -8,6 +8,8 @@ signal toast_requested(text: String)
 var main: Node
 var _grid: GridContainer
 var _summary: Label
+var _final_chip: Control
+var _archive_row: HBoxContainer
 var _family_bars: HBoxContainer
 var _filter_row: HBoxContainer
 var _family := ""
@@ -19,6 +21,7 @@ func setup(m: Node) -> void:
 	refresh()
 
 func refresh() -> void:
+	_rebuild_archive()
 	_rebuild_filter()
 	_rebuild_progress()
 	_rebuild_grid()
@@ -38,7 +41,14 @@ func _build() -> void:
 	head.add_child(UIKit.spacer())
 	_summary = UIKit.label("", 13, UIKit.MUTED)
 	head.add_child(_summary)
+	_final_chip = UIKit.chip("全收集", UIKit.OK)
+	_final_chip.visible = false
+	head.add_child(_final_chip)
 	root.add_child(head)
+
+	# 归档协议：各族系 / 全收集里程碑（达成即自动发放，这里只展示状态与奖励）
+	_archive_row = UIKit.hbox(10)
+	root.add_child(_archive_row)
 
 	_family_bars = UIKit.hbox(14)
 	root.add_child(_family_bars)
@@ -54,6 +64,45 @@ func _build() -> void:
 	_grid.add_theme_constant_override("v_separation", 10)
 	scroll.add_child(_grid)
 
+# ---------------- 归档里程碑（阶段十） ----------------
+
+func _rebuild_archive() -> void:
+	for c in _archive_row.get_children():
+		c.queue_free()
+	for m in CodexRewards.defs():
+		_archive_row.add_child(_archive_card(m))
+
+func _archive_card(m: Dictionary) -> Control:
+	var id := str(m.get("id", ""))
+	var settled := CodexRewards.is_settled(id)
+	var pr: Array = CodexRewards.progress_of(m)
+	var cur := int(pr[0])
+	var goal := int(pr[1])
+	var col := UIKit.OK if settled else UIKit.ACCENT2
+	var p := UIKit.panel(UIKit.PANEL_HI if settled else UIKit.PANEL, 8,
+		Color(col.r, col.g, col.b, 0.5) if settled else UIKit.LINE)
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.tooltip_text = str(m.get("desc", ""))
+
+	var mm := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		mm.add_theme_constant_override("margin_" + side, 10)
+	p.add_child(mm)
+	var v := UIKit.vbox(4)
+	mm.add_child(v)
+
+	var th := UIKit.hbox(6)
+	th.add_child(UIKit.label(str(m.get("name", id)), 13, UIKit.OK if settled else UIKit.TEXT))
+	th.add_child(UIKit.spacer())
+	th.add_child(UIKit.chip("已归档" if settled else "进行中", UIKit.OK if settled else UIKit.MUTED, 10))
+	v.add_child(th)
+
+	var scope := "全图鉴" if str(m.get("rule", {}).get("type", "")) == "codex_count" \
+		else GameData.family_name(str(m.get("rule", {}).get("family", "")))
+	v.add_child(UIKit.label("%s %d / %d" % [scope, cur, goal], 11, UIKit.MUTED))
+	v.add_child(UIKit.label("归档津贴 " + GameState.reward_text(m.get("reward", {})), 11, UIKit.WARN))
+	return p
+
 # ---------------- 进度 ----------------
 
 func _rebuild_progress() -> void:
@@ -63,6 +112,8 @@ func _rebuild_progress() -> void:
 	var found := int(prog[0])
 	var total := int(prog[1])
 	var pct := 0.0 if total <= 0 else float(found) / float(total) * 100.0
+	_summary.text = "%d / %d · %.0f%%" % [found, total, pct]
+	_final_chip.visible = total > 0 and found >= total
 
 	var total_v := UIKit.vbox(4)
 	total_v.custom_minimum_size.x = 240
