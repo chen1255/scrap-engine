@@ -10,6 +10,7 @@ signal saved()   # 存档写入成功后触发，供云存档自动上传等外�
 signal slot_changed(slot: int)   # 切换存档槽位后触发
 
 const SAVE_PATH := "user://scrap_engine_save.json"   # 槽 1 的路径（历史存档，保持兼容）
+const SAVE_VERSION := 4                              # 存档格式版本（写入 to_dict，供分享码 / 旧档兼容判定）
 const SLOT_COUNT := 3
 const START_CREDITS := 600
 const START_ENERGY := 12
@@ -331,7 +332,7 @@ func delete_slot(n: int) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": 4,
+		"version": SAVE_VERSION,
 		"credits": credits,
 		"energy": energy,
 		"inventory": inventory,
@@ -362,6 +363,12 @@ func load_game() -> bool:
 	var d: Variant = JSON.parse_string(txt)
 	if typeof(d) != TYPE_DICTIONARY:
 		return false
+	_apply_dict(d)
+	return true
+
+## 把「存档字典」写进内存。读档（load_game）与分享码导入（apply_snapshot）共用这一份字段映射，
+## 避免两处规则漂移：新增字段时只需改这里一次。
+func _apply_dict(d: Dictionary) -> void:
 	credits = int(d.get("credits", START_CREDITS))
 	energy = int(d.get("energy", START_ENERGY))
 	inventory = d.get("inventory", {})
@@ -378,7 +385,16 @@ func load_game() -> bool:
 	if typeof(st) == TYPE_DICTIONARY:
 		for k in st.keys():
 			stats[k] = st[k]
-	return true
+
+## 应用一份来自分享码的存档快照（阶段九）：写入内存 → 落盘到当前槽位 → 广播刷新。
+## 与「切换槽位读档」走同一套映射与同一条广播顺序，因此 HUD / 各视图 / 成就评估的反应完全一致。
+func apply_snapshot(d: Dictionary) -> void:
+	_apply_dict(d)
+	save_game()
+	credits_changed.emit(credits)
+	energy_changed.emit(energy)
+	inventory_changed.emit()
+	slot_changed.emit(save_slot)
 
 ## 把库存统一成 { "n": 数量, "cs": 保养度总和 } 结构，兼容「只有数量」的旧存档。
 func _normalize_inventory() -> void:

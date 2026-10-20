@@ -4,6 +4,7 @@ extends Node
 ##
 ## 实例化主场景 -> 切到指定视图 -> 抓一帧存 PNG -> 退出。仅用于开发期肉眼核对图标与布局，
 ## 不参与游戏运行。--seed 会临时给仓库塞满全部物品，方便一次看全 42 张图标（内存态，不写存档）。
+## --share 会在设置页填入一段真实分享码，用于核对长码换行与面板布局（同样只改内存态）。
 
 func _ready() -> void:
 	await get_tree().process_frame
@@ -13,6 +14,7 @@ func _ready() -> void:
 	var inspect := ""
 	var variant := ""
 	var show_onboarding := false
+	var want_share := false
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--view="):
 			view = a.substr(7)
@@ -20,6 +22,9 @@ func _ready() -> void:
 			inspect = a.substr(10)
 		elif a == "--seed":
 			seed_all = true
+		elif a == "--share":
+			# 在设置页填一段真实分享码（内存态，不执行导入、不写存档）
+			want_share = true
 		elif a == "--onboarding":
 			# 强制展示新手引导浮层（默认抑制，避免挡住目标页 / 各视图的截图核对）
 			show_onboarding = true
@@ -51,6 +56,13 @@ func _ready() -> void:
 	main.switch_view(view)
 	if inspect != "":
 		main.open_inspect(inspect)
+	if want_share:
+		# 开发期工具直接取主控台的视图表，不走正式接口（避免为一个截图参数污染主界面 API）
+		var views: Dictionary = main.get("_views")
+		var sv: Variant = views.get("settings")
+		if sv != null and (sv as Node).has_method("demo_share"):
+			(sv as Node).call("demo_share")
+			variant += "_share"
 
 	# 等欢迎 toast 淡出（2.2 秒 + 余量），免得挡住内容区
 	await get_tree().create_timer(2.5).timeout

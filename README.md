@@ -43,6 +43,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 音频与演出 | 17 段程序化合成的短音效 + 3 段循环 BGM + 1 段环境铺底（零外部素材），BGM 随视图自动交叉淡切；开箱逐件翻牌揭示、熔炉/翻新抽签滚动定格、飘字与视图切换过渡；HUD 可一键静音 |
 | 设置 | 侧栏「设置」页：主音量 / 音效音量 / BGM 音量、音效与 BGM 开关、全屏与分辨率、界面字号（4 档）、色盲友好配色；改动即时生效并落盘 `scrap_settings.cfg` |
 | 存档槽位 | 3 个独立槽位（1 号沿用旧文件名，向后兼容）；每个槽独立保存进度，可与 Steam 云存档按槽位名联动 |
+| 存档分享码 | 设置页把当前进度导出成一段 `SCRAP9:…` 分享码（gzip + base64 + 校验和），复制到另一台机器 / 另一个槽位粘贴即可还原；导入前需勾选覆盖确认，任何校验不过都**拒绝且不写入** |
 | 目标 | 侧栏「目标」页：16 条作业目标（`data/goals.json`），达成条件用 7 种规则类型描述，与成就共用同一套判定引擎；达成后手动领取奖励（信用点 / 体力 / 物品），可领取时导航项与卡片同步高亮 |
 | 成就奖励 | 19 条成就（`data/achievements.json`）**解锁即自动发放**奖励（`data/achievement_rewards.json`，仅信用点 / 体力），发放台账写入存档防重复；成就页按 JSON 顺序三等分展示分档进度、奖励预览与「已发放」标记。与目标相反：成就自动发奖、目标手动领取 |
 | 新手引导 | 5 步教练卡（`data/onboarding.json`）：每步 = 一句说明 + 对应视图 + 可选的推进规则，满足规则或点「下一步」即推进，全程可「跳过引导」；进度写进存档，只对真正的新档弹一次 |
@@ -92,13 +93,14 @@ scrap-engine/
 │   └── main.tscn            # 唯一主场景
 ├── scripts/
 │   ├── autoload/            # GameData / GameState / LootSystem / CraftSystem / MarketSystem / Rules / Objectives / Onboarding / Settings / Sfx / Bgm / Achievements / SteamService
+│   ├── share_code.gd        # 存档分享码编解码（class_name ShareCode：gzip + base64 + 校验和，纯静态）
 │   └── ui/                  # 主界面、10 个视图、全息检视面板、新手引导浮层、UI 组件库（含动效原语）
 ├── shaders/                 # 全息卡片与全息图标着色器
 ├── assets/
 │   ├── icons/               # 43 张 512×512 透明物品图标（含「未知」占位）
 │   ├── audio/               # 17 段音效 + 3 段循环 BGM + 1 段环境音（由 tools/gen_sfx.gd、tools/gen_bgm.gd 生成）
 │   └── branding/            # 应用图标（png + 多尺寸 ico）
-├── tests/                   # headless 自测：概率（sim_rates）/ Steam（sim_steam）/ 设置与音频（sim_settings）/ 目标与引导（sim_goals）
+├── tests/                   # headless 自测：概率（sim_rates）/ Steam（sim_steam）/ 设置与音频（sim_settings）/ 目标与引导（sim_goals）/ 存档分享码（sim_share）
 └── tools/                   # 开发期工具：图标烘焙、音效 / BGM 合成、视图截图、Steam addon 拉取
 ```
 
@@ -138,6 +140,16 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 
 - **色盲友好配色**：开启后把语义色（`OK` 绿 / `BAD` 红 / `WARN` 橙，以及由 JSON 数据驱动的族系色、品相色、阶次色）整体替换为 Okabe–Ito 系高区分度版本（绿→天蓝、红→朱橙、橙→正黄……），品牌主色（青 / 紫）保持不变；掉率占比条、图例、抽签标题等全部同步。
 - **存档槽位**：3 个独立槽位，可随时切换 / 重新载入 / 删除；槽 1 沿用历史文件名 `scrap_engine_save.json`（向后兼容），云存档文件名随槽位变化（如槽 2 = `scrap_engine_save_slot2.json`）。
+
+### 存档分享码
+
+进度原本只活在 `user://scrap_engine_save*.json` 三个槽位文件里——想换机、备份，或把收集进度发给朋友，只能去翻 user 目录手动拷文件。**存档分享码**在设置页加了一条纯搬运通道：
+
+- **导出** —— 「生成分享码」把当前槽位的完整存档编码成一段文本：`SCRAP9:<存档版本>:<校验和>:<gzip 压缩后的 base64>`。JSON 紧凑无缩进 + gzip 压缩，整段通常 0.5~1.4 KB，只读文本框自动换行并可整段复制；旁边显示字符数与一行摘要（₡ / ⚡ / 物品数 / 图鉴进度）。
+- **导入** —— 把码粘进输入框（**折行、空格都会被忽略**，聊天工具折行粘贴也能用），勾选「我确认覆盖当前槽位存档」后按钮才可用，点击即还原到**当前槽位**。导入走的是与读档**同一份字段映射**（`GameState._apply_dict`），落盘后照常广播刷新 HUD / 各视图 / 成就评估。
+- **先校验、后解压、绝不半写入** —— 前缀、段数、base64 字符集、gzip 魔数、校验和（压缩载荷 sha256 前 16 位）、JSON 结构、字段类型、版本逐层把关；任何一层不过都返回中文原因（如「分享码校验不通过（内容可能被改动或被截断）」「分享码来自更高版本（v5），请先更新游戏」）并**放弃写入**，坏码不会污染任何槽位。
+- **与槽位无关** —— 快照里不含槽位号，槽 1 导出的码可以导入槽 2/3；存档格式与文件名一字未改，`version` 仍是 4，既有存档、云存档与四个既有自测全部逐位照旧。
+- **隐私提示** —— 分享码就是存档的明文（只是压缩编码，没有加密），面板上直接写明「请勿公开贴出」。
 
 ### 目标与新手引导
 
@@ -249,6 +261,12 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_settin
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_goals.tscn
 ```
 
+存档分享码自测（编码往返逐字段一致 / 前缀与校验和 / 折行粘贴容忍 / 篡改 / 截断 / 空串 / base64 坏 / 高版本 / 字段非法全部拒绝 / 摘要文案 / 导入后内存与存档文件一致且槽 1 不被触碰）：
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_share.tscn
+```
+
 ### 打包 Windows 构建
 
 ```powershell
@@ -269,6 +287,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 | 阶段六 | 核心催化：熔炉晋升可额外投入 1 个核心，把写明的成功率加成兑现（`catalyst_bonus` → 权重点，与过载催化剂同语义），核心随即被消耗；目标 14 → 16，默认爆率逐位不变 | 完成 |
 | 阶段七 | 词条玩法闭环：把 24 条「只在检视面板展示」的词条按既有描述语义接进玩法（晋升成功率 / 精修 / 翻新 / 拆解产出 / 售出价格 五处修正），效果映射表写在新增 `data/trait_effects.json`，`traits.json` 一字不改，无词条时逐位不变 | 完成 |
 | 阶段八 | 成就奖励闭环：19 条成就解锁即自动发放奖励（新增 `data/achievement_rewards.json`，仅信用点 / 体力），多轮评估兜底连锁解锁，成就页按 JSON 顺序三等分做分档进度 + 奖励预览 + 已发放标记，存档加发放台账防重复（`version` 4）；`achievements.json` 一字不改，无奖励时逐位不变 | 完成 |
+| 阶段九 | 存档分享码：设置页把当前进度导出成 `SCRAP9:…` 文本（gzip + base64 + 校验和），可在另一台机器 / 另一个槽位粘贴还原；解码先校验后解压，失败一律拒绝且不写入，导入需勾选覆盖确认。新增 `scripts/share_code.gd` 与 `tests/sim_share`，存档格式 / 文件名 / 既有四个自测逐位不变 | 完成 |
 
 开发期截图工具（需要渲染设备，不能 `--headless`）：
 
@@ -276,7 +295,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 Godot_v4.7.2-stable_win64.exe --path . res://tools/shot.tscn -- --view=inventory --seed
 ```
 
-`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / goals / steam / settings`，`--inspect=<item_id>` 可直接打开全息检视面板；另有 `--colorblind`（色盲配色）、`--font-scale=<x>`（字号缩放）与 `--onboarding`（强制展示新手引导浮层）用于核对设置与引导效果。
+`--view=` 可选 `market / inventory / disassembly / promotion / repair / exchange / codex / goals / steam / settings`，`--inspect=<item_id>` 可直接打开全息检视面板；另有 `--colorblind`（色盲配色）、`--font-scale=<x>`（字号缩放）、`--onboarding`（强制展示新手引导浮层）与 `--share`（设置页填入一段真实分享码）用于核对设置、引导与分享码面板的效果。
 
 ### 许可
 
@@ -321,6 +340,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Audio & presentation | 17 procedurally synthesized sound effects + 3 seamless-loop BGM tracks + 1 ambient bed (no external assets), with BGM auto-crossfading per view; card-by-card reveal, furnace/refurbish draw spin-and-settle, floating numbers, and view transitions; one-click mute in the HUD |
 | Settings | A "Settings" view: master / SFX / BGM volume, SFX & BGM toggles, fullscreen and resolution, UI font scale (4 steps), and a colorblind-friendly palette; changes apply instantly and persist to `scrap_settings.cfg` |
 | Save slots | 3 independent slots (slot 1 keeps the legacy filename for backward compatibility); each holds its own progress and maps to a Steam cloud filename per slot |
+| Save share code | The Settings view exports the current progress as a `SCRAP9:…` share code (gzip + base64 + checksum) that can be pasted on another machine or into another slot; importing requires a confirmation tick and **refuses to write anything** whenever any check fails |
 | Goals | A "Goals" view: 16 objectives (`data/goals.json`) described by 7 rule types, sharing **one rules engine with the Steam achievements**; rewards (credits / energy / items) are claimed manually, and the nav item flags what is claimable |
 | Achievement rewards | 19 achievements (`data/achievements.json`) **auto-pay their reward on unlock** (`data/achievement_rewards.json`, credits / energy only), with a payout ledger that records each achievement's **actual paid-out amounts** to prevent duplicates — so the page summary sums what really landed and never overstates energy swallowed by the cap (legacy `true` entries carry no amounts and fall back to the declared value); the achievements page splits them into three bands (JSON order) showing tiered progress, reward previews, and a "paid" mark. The mirror image of goals: achievements pay automatically, goals are claimed by hand |
 | Onboarding | A 5-step coach card (`data/onboarding.json`): each step is a line of text + a target view + an optional advance rule, advanced either by the rule or by "Next", and skippable at any point; progress is saved and only ever shown to a genuinely new save |
@@ -376,6 +396,16 @@ The "Settings" view centralizes: master / SFX / BGM volume sliders, SFX & BGM to
 
 - **Colorblind-friendly palette** — When enabled, semantic colors (`OK` green / `BAD` red / `WARN` amber, plus the JSON-driven family, condition, and tier colors) are swapped for high-contrast Okabe–Ito variants (green→sky blue, red→vermillion, amber→yellow, …), while brand colors (cyan / violet) stay put; odds bars, legends, and draw titles all follow.
 - **Save slots** — 3 independent slots that can be switched / reloaded / deleted at any time; slot 1 keeps the legacy filename `scrap_engine_save.json` (backward compatible), and the cloud filename follows the slot (e.g. slot 2 = `scrap_engine_save_slot2.json`).
+
+### Save share codes
+
+Progress used to live only in the three `user://scrap_engine_save*.json` slot files — moving to another machine, keeping a backup, or sending your collection to a friend meant digging through the user directory and copying files by hand. **Save share codes** add a pure transport channel on the Settings view:
+
+- **Export** — "Generate share code" encodes the current slot's full save as one line of text: `SCRAP9:<save version>:<checksum>:<gzip-compressed base64>`. Compact JSON plus gzip keeps the whole code around 0.5–1.4 KB; the read-only box wraps it automatically and it can be copied in one go. Next to it you get the character count and a one-line summary (₡ / ⚡ / item count / codex progress).
+- **Import** — Paste the code into the input box (**line breaks and spaces are ignored**, so wrapped chat messages work too), tick "I confirm overwriting the current slot's save" to enable the button, then click to restore into the **current slot**. Importing reuses **the exact same field mapping as loading a save** (`GameState._apply_dict`) and broadcasts the usual refresh signals afterwards, so the HUD, views, and achievement evaluation react just like a slot switch.
+- **Validate first, decompress later, never half-write** — Prefix, segment count, base64 alphabet, gzip magic, checksum (first 16 hex chars of the compressed payload's sha256), JSON structure, field types, and version are checked in order; any failure returns a readable reason (e.g. "checksum mismatch — the code may have been edited or truncated", "the code comes from a newer version (v5), please update first") and **abandons the write**, so a broken code can never contaminate a slot.
+- **Slot-independent** — The snapshot carries no slot number, so a code exported from slot 1 imports into slots 2/3. The save format and filenames are untouched (`version` stays 4), so existing saves, cloud saves, and all four existing self-tests remain bit-for-bit identical.
+- **Privacy note** — A share code *is* your save in plaintext (compressed, not encrypted); the panel says so outright: don't post it publicly.
 
 ### Goals & onboarding
 
@@ -454,6 +484,12 @@ Goals / onboarding / rules self-test (the 7 rule types, the 16 objective definit
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_goals.tscn
+```
+
+Save share code self-test (field-for-field encode round-trip / prefix & checksum / wrapped-paste tolerance / tampered, truncated, empty, bad-base64, newer-version and malformed-field inputs all rejected / summary text / after import the memory state matches the save file and slot 1 is untouched):
+
+```powershell
+Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_share.tscn
 ```
 
 ### Building for Windows

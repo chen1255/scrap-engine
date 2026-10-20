@@ -1,6 +1,7 @@
 extends Control
 ## 设置面板：音频（主 / 音效 / BGM 音量与开关）、画面（全屏 / 分辨率）、
-## 界面（字号缩放 / 色盲友好配色）、存档槽位（3 槽 + Steam 云同步）。
+## 界面（字号缩放 / 色盲友好配色）、存档槽位（3 槽 + Steam 云同步）、
+## 存档分享码（导出 / 复制 / 粘贴导入，阶段九）。
 ##
 ## 所有设置项即时生效并落盘到 user://scrap_settings.cfg。
 ## 字号与配色会影响整棵界面树（大量字号是逐控件 override），因此改完通知主控台重建界面。
@@ -16,6 +17,15 @@ var _video_body: VBoxContainer
 var _ui_body: VBoxContainer
 var _slot_body: VBoxContainer
 
+# ---- 存档分享码面板（只建一次，刷新时只改文案与按钮状态，避免清空已生成的长码）----
+var _export_edit: TextEdit
+var _export_info: Label
+var _copy_btn: Button
+var _import_edit: TextEdit
+var _confirm: CheckButton
+var _import_btn: Button
+var _share_result: Label
+
 func setup(m: Node) -> void:
 	main = m
 	_build()
@@ -26,6 +36,7 @@ func refresh() -> void:
 	_rebuild_video()
 	_rebuild_ui()
 	_rebuild_slots()
+	_refresh_share()
 
 # ---------------- 构建 ----------------
 
@@ -90,10 +101,17 @@ func _build() -> void:
 
 	var scroll := UIKit.scroll()
 	right.add_child(scroll)
-	var list := UIKit.vbox(10)
+	var list := UIKit.vbox(16)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
-	_slot_body = list
+
+	# 槽位卡每次刷新都重建，因此单独放一层容器；分享码面板挂在其下方且只建一次，
+	# 刷新时只更新文案与按钮状态，不会清掉玩家已经生成 / 粘贴的长码。
+	_slot_body = UIKit.vbox(10)
+	_slot_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_child(_slot_body)
+
+	_build_share_panel(list)
 
 # ---------------- 音频 ----------------
 
@@ -206,6 +224,130 @@ func _delete_slot(n: int) -> void:
 	GameState.delete_slot(n)
 	toast_requested.emit("已删除存档槽 %d" % n)
 	refresh()
+
+# ---------------- 存档分享码 ----------------
+
+func _build_share_panel(host: Control) -> void:
+	host.add_child(UIKit.label("存档分享码", 14, UIKit.ACCENT2))
+
+	var p := UIKit.panel(UIKit.PANEL, 8, UIKit.LINE)
+	host.add_child(p)
+	var v := UIKit.vbox(9)
+	_margin(p, 12).add_child(v)
+
+	v.add_child(UIKit.muted("导出当前进度为一段分享码，在另一台机器 / 另一个槽位粘贴即可还原。分享码即存档明文，请勿公开。", 11))
+
+	# ---- 导出 ----
+	var row := UIKit.hbox(8)
+	var gen_btn := UIKit.btn("生成分享码")
+	gen_btn.tooltip_text = "把当前槽位的存档编码成一段可复制的文本"
+	gen_btn.pressed.connect(_on_generate)
+	row.add_child(gen_btn)
+	_copy_btn = UIKit.btn("复制", false, 76)
+	_copy_btn.disabled = true
+	_copy_btn.tooltip_text = "复制到剪贴板"
+	_copy_btn.pressed.connect(_on_copy)
+	row.add_child(_copy_btn)
+	row.add_child(UIKit.spacer())
+	v.add_child(row)
+
+	_export_edit = _share_edit("点「生成分享码」后，这里会出现可复制的整段内容", false)
+	v.add_child(_export_edit)
+	_export_info = UIKit.muted("尚未生成", 11)
+	v.add_child(_export_info)
+
+	v.add_child(UIKit.hsep(4))
+
+	# ---- 导入 ----
+	_import_edit = _share_edit("把分享码粘贴到这里（可含换行 / 空格）", true)
+	v.add_child(_import_edit)
+
+	var irow := UIKit.hbox(8)
+	_confirm = CheckButton.new()
+	_confirm.text = "我确认覆盖当前槽位存档"
+	_confirm.add_theme_font_size_override("font_size", UIKit.fs(11))
+	_confirm.toggled.connect(func(_on: bool): _refresh_share())
+	irow.add_child(_confirm)
+	irow.add_child(UIKit.spacer())
+	_import_btn = UIKit.btn("导入", false, 132)
+	_import_btn.pressed.connect(_on_import)
+	irow.add_child(_import_btn)
+	v.add_child(irow)
+
+	_share_result = UIKit.muted("覆盖后不可撤销。", 11)
+	v.add_child(_share_result)
+
+## 分享码输入 / 输出框：统一用深色底 + 等宽感的小字号，长码自动换行。
+func _share_edit(placeholder: String, editable: bool) -> TextEdit:
+	var t := TextEdit.new()
+	t.editable = editable
+	t.placeholder_text = placeholder
+	t.custom_minimum_size.y = 56
+	t.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	t.scroll_fit_content_height = false
+	t.add_theme_font_size_override("font_size", UIKit.fs(11))
+	t.add_theme_color_override("font_color", UIKit.TEXT)
+	t.add_theme_color_override("font_placeholder_color", UIKit.MUTED)
+	t.add_theme_color_override("caret_color", UIKit.ACCENT)
+	for state in ["normal", "focus", "read_only"]:
+		t.add_theme_stylebox_override(state, UIKit.sb(UIKit.BG, 6, UIKit.LINE))
+	return t
+
+## 面板的轻量刷新：按钮文案跟随当前槽位，导入按钮跟随确认勾选。
+func _refresh_share() -> void:
+	if _import_btn == null:
+		return
+	_import_btn.text = "导入到槽 %d" % GameState.save_slot
+	_import_btn.disabled = not _confirm.button_pressed
+	_copy_btn.disabled = _export_edit.text == ""
+
+func _on_generate() -> void:
+	var snap: Dictionary = GameState.to_dict()
+	var code := ShareCode.encode(snap)
+	_export_edit.text = code
+	_export_info.text = "共 %d 字符 · %s" % [code.length(), ShareCode.describe(snap)]
+	_set_share_result("已生成槽 %d 的分享码。" % GameState.save_slot, true)
+	_refresh_share()
+
+func _on_copy() -> void:
+	if _export_edit.text == "":
+		return
+	DisplayServer.clipboard_set(_export_edit.text)
+	_set_share_result("已复制到剪贴板（%d 字符）。" % _export_edit.text.length(), true)
+
+func _on_import() -> void:
+	if not _confirm.button_pressed:
+		return
+	var res: Dictionary = ShareCode.decode(_import_edit.text)
+	if not bool(res.get("ok", false)):
+		Sfx.play("error")
+		_set_share_result("导入失败：%s" % str(res.get("reason", "分享码无效")), false)
+		return
+	var snap: Dictionary = res.get("save", {})
+	GameState.apply_snapshot(snap)
+	_set_share_result("已导入到槽 %d：%s" % [GameState.save_slot, ShareCode.describe(snap)], true)
+	_import_edit.text = ""   # 清空输入，避免误触重复导入
+	toast_requested.emit("分享码已导入到槽 %d" % GameState.save_slot)
+	refresh()
+
+## 结果行：OK / BAD 两色。颜色走 UIKit 运行期调色板，因此色盲模式同步生效。
+func _set_share_result(text: String, ok: bool) -> void:
+	if _share_result == null:
+		return
+	_share_result.text = text
+	_share_result.add_theme_color_override("font_color", UIKit.OK if ok else UIKit.BAD)
+
+## 开发期截图用（tools/shot.gd --share）：填一段真实分享码并勾选确认，
+## 只做展示，不执行导入（绝不因截图改写存档）。
+func demo_share() -> void:
+	var snap: Dictionary = GameState.to_dict()
+	var code := ShareCode.encode(snap)
+	_export_edit.text = code
+	_export_info.text = "共 %d 字符 · %s" % [code.length(), ShareCode.describe(snap)]
+	_import_edit.text = code
+	_confirm.button_pressed = true
+	_set_share_result("已填入真实分享码（截图预览，未导入）。", true)
+	_refresh_share()
 
 # ---------------- 行构造 ----------------
 
