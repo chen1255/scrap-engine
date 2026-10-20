@@ -10,6 +10,7 @@ var _cloud_body: VBoxContainer
 var _ach_body: VBoxContainer
 var _ach_summary: Label
 var _ach_bar: ProgressBar
+var _ach_bands: VBoxContainer
 
 func setup(m: Node) -> void:
 	main = m
@@ -87,6 +88,10 @@ func _build() -> void:
 	_ach_bar.custom_minimum_size = Vector2(0, 10)
 	_ach_bar.show_percentage = false
 	rv.add_child(_ach_bar)
+	# 分档进度：按 JSON 顺序三等分，每档一条汇总进度
+	_ach_bands = UIKit.vbox(6)
+	rv.add_child(_ach_bands)
+	rv.add_child(UIKit.muted("解锁成就即自动发放奖励（信用点 / 体力），无需手动领取。", 11))
 	var scroll := UIKit.scroll()
 	rv.add_child(scroll)
 	var list := UIKit.vbox(8)
@@ -204,17 +209,42 @@ func _rebuild_achievements() -> void:
 	var found := int(prog[0])
 	var total := int(prog[1])
 	var pct := 0.0 if total <= 0 else float(found) / float(total) * 100.0
-	_ach_summary.text = "已解锁 %d / %d · %.0f%%" % [found, total, pct]
+	var rt := Achievements.rewarded_totals()
+	_ach_summary.text = "已解锁 %d / %d · %.0f%% · 已发放奖励 ₡%d⚡%d" % [found, total, pct, int(rt["credits"]), int(rt["energy"])]
 	_ach_bar.max_value = maxf(1.0, float(total))
 	_ach_bar.value = float(found)
 
+	_rebuild_bands()
 	for a in Achievements.defs:
 		_ach_body.add_child(_ach_row(a))
+
+## 分档进度：每档一条「第 N 档 · 已解锁 x/y」+ 进度条
+func _rebuild_bands() -> void:
+	_clear(_ach_bands)
+	for b in Achievements.bands():
+		var un := int(b["unlocked"])
+		var tt := int(b["total"])
+		var done := tt > 0 and un >= tt
+		var row := UIKit.vbox(3)
+		var h := UIKit.hbox(8)
+		h.add_child(UIKit.label(str(b["name"]), 12, UIKit.ACCENT2 if done else UIKit.MUTED))
+		h.add_child(UIKit.spacer())
+		h.add_child(UIKit.label("%d / %d" % [un, tt], 11, UIKit.OK if done else UIKit.MUTED))
+		row.add_child(h)
+		var bar := ProgressBar.new()
+		bar.custom_minimum_size = Vector2(0, 6)
+		bar.show_percentage = false
+		bar.max_value = maxf(1.0, float(tt))
+		bar.value = float(un)
+		bar.add_theme_stylebox_override("fill", UIKit.sb(UIKit.OK if done else UIKit.ACCENT, 3))
+		row.add_child(bar)
+		_ach_bands.add_child(row)
 
 func _ach_row(def: Dictionary) -> Control:
 	var id := str(def["id"])
 	var hidden := bool(def.get("hidden", false))
 	var unlocked := Achievements.is_unlocked(id)
+	var revealed := unlocked or not hidden
 	var col := UIKit.OK if unlocked else UIKit.MUTED
 
 	var p := UIKit.panel(UIKit.PANEL_HI if unlocked else UIKit.PANEL, 8,
@@ -230,8 +260,8 @@ func _ach_row(def: Dictionary) -> Control:
 
 	var v := UIKit.vbox(3)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var name_txt := str(def.get("name", id)) if (unlocked or not hidden) else "隐藏成就"
-	var desc_txt := str(def.get("desc", "")) if (unlocked or not hidden) else "达成后揭晓"
+	var name_txt := str(def.get("name", id)) if revealed else "隐藏成就"
+	var desc_txt := str(def.get("desc", "")) if revealed else "达成后揭晓"
 	var nm := UIKit.label(name_txt, 14, UIKit.TEXT if unlocked else UIKit.MUTED)
 	v.add_child(nm)
 	var d := UIKit.muted(desc_txt, 11)
@@ -250,12 +280,18 @@ func _ach_row(def: Dictionary) -> Control:
 			v.add_child(UIKit.label("进度 %d / %d" % [cur, need], 10, UIKit.MUTED))
 	row.add_child(v)
 
-	if unlocked:
-		var rl := UIKit.vbox(2)
-		rl.add_child(UIKit.chip("已解锁", UIKit.OK, 11))
-		if SteamService.is_available():
-			rl.add_child(UIKit.label("已同步", 10, UIKit.MUTED))
-		row.add_child(rl)
+	# 奖励区：奖励预览（隐藏且未解锁时不剧透）+ 已发放徽标
+	var rl := UIKit.vbox(3)
+	if not revealed:
+		rl.add_child(UIKit.label("奖励 ？？", 10, UIKit.MUTED))
+	elif Achievements.has_reward(id):
+		rl.add_child(UIKit.chip(GameState.reward_text(Achievements.reward_of(id)), UIKit.WARN, 10))
+	else:
+		rl.add_child(UIKit.label("无奖励", 10, UIKit.MUTED))
+	if Achievements.is_rewarded(id):
+		rl.add_child(UIKit.label("✓ 已发放", 10, UIKit.OK))
+	rl.add_child(UIKit.label("◆ 已解锁" if unlocked else "☆ 未解锁", 10, UIKit.OK if unlocked else UIKit.MUTED))
+	row.add_child(rl)
 	return p
 
 # ---------------- 小工具 ----------------

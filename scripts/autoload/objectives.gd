@@ -95,38 +95,13 @@ func claim(id: String) -> Dictionary:
 	goals_changed.emit()
 	return { "ok": true, "reward": reward, "got": got }
 
-## 发放奖励并返回实发内容摘要（供 toast 展示）。
+## 发放奖励并返回实发内容摘要（供 toast 展示）。与成就共用 GameState 的统一发放路径。
 func _grant(reward: Dictionary) -> Dictionary:
-	var got: Dictionary = {}
-	var cr := int(reward.get("credits", 0))
-	if cr > 0:
-		GameState.add_credits(cr)
-		got["credits"] = cr
-	var en := int(reward.get("energy", 0))
-	if en > 0:
-		GameState.add_energy(en)
-		got["energy"] = en
-	var listed: Array = []
-	for it in reward.get("items", []):
-		var iid := str(it.get("id", ""))
-		var n := int(it.get("n", 1))
-		if iid != "" and n > 0:
-			GameState.add_item(iid, n)
-			listed.append({ "id": iid, "n": n })
-	if listed.size() > 0:
-		got["items"] = listed
-	return got
+	return GameState.grant_reward(reward)
 
 ## 把奖励描述成一行中文文案（供 toast / 卡片）。
 func reward_text(reward: Dictionary) -> String:
-	var parts := PackedStringArray()
-	if int(reward.get("credits", 0)) > 0:
-		parts.append("₡%d" % int(reward.get("credits", 0)))
-	if int(reward.get("energy", 0)) > 0:
-		parts.append("⚡%d" % int(reward.get("energy", 0)))
-	for it in reward.get("items", []):
-		parts.append("%s ×%d" % [GameData.item_name(str(it.get("id", ""))), int(it.get("n", 1))])
-	return "、".join(parts)
+	return GameState.reward_text(reward)
 
 # ---------------- 查询接口（供 UI / 测试） ----------------
 

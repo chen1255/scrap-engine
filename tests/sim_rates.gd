@@ -209,21 +209,28 @@ func _test_repair_deterministic() -> void:
 	var plan := CraftSystem.repair_plan(id, steps)
 	var mats_before := _family_mat_total("mech")
 	var credits_before := GameState.credits
+	# 阶段八起成就解锁会「自动发奖」，可能在同一瞬间打进信用点（如首次精修），污染「本次精修的扣费」测量。
+	# 故记录期间成就发放的信用点，从总差额中剔除，还原精修自身的真实扣费。
+	var rt_before: Dictionary = Achievements.rewarded_totals()
 	var res: Dictionary = CraftSystem.repair(id, steps)
 	var mats_spent := mats_before - _family_mat_total("mech")
 	var credits_spent := credits_before - GameState.credits
+	var ach_credits := int(Achievements.rewarded_totals()["credits"]) - int(rt_before["credits"])
+	var repair_cost := credits_spent + ach_credits
 
 	var after := GameState.condition_of(id)
 	var cond_ok := absf(after - float(plan["after"])) < 0.001 and absf(after - 100.0) < 0.001
 	var mats_ok := mats_spent == int(plan["materials_need"])
-	var credits_ok := credits_spent == int(plan["credits"])
+	var credits_ok := repair_cost == int(plan["credits"])
 	var ok := bool(res.get("ok", false)) and cond_ok and mats_ok and credits_ok
 	if not ok:
 		_fails += 1
-	print("  精修 35→100 · %d 档 · 品相 %s · 材料扣 %d/%d %s · 信用点扣 %d/%d %s %s"
+	print("  精修 35→100 · %d 档 · 品相 %s · 材料扣 %d/%d %s · 信用点扣 %d/%d %s%s %s"
 		% [steps, "%.0f" % after, mats_spent, int(plan["materials_need"]),
-		   "OK" if mats_ok else "错", credits_spent, int(plan["credits"]),
-		   "OK" if credits_ok else "错", "[OK]" if ok else "[DEV]"])
+		   "OK" if mats_ok else "错", repair_cost, int(plan["credits"]),
+		   "OK" if credits_ok else "错",
+		   "" if ach_credits == 0 else "（已剔除成就奖励 +%d）" % ach_credits,
+		   "[OK]" if ok else "[DEV]"])
 
 ## 翻新是概率的：实际结果分布必须与 recipes.json 的 draw 权重一致。
 func _test_refurbish_distribution() -> void:

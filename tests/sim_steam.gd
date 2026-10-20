@@ -3,7 +3,9 @@ extends Node
 ##   1) 降级安全：SteamService 在「有 Steam / 无 Steam（缺 addon 或未启动客户端）」两种环境下
 ##      都不崩溃；不可用时各接口安全返回 no-op；
 ##   2) 成就规则：脚本化触发一串玩法事件，断言成就按 data/achievements.json 的规则正确解锁；
-##   3) 存档往返：存档含 achievements 字段且 save → load 一致。
+##   3) 成就奖励闭环：data/achievement_rewards.json 完整性、解锁即自动发放、幂等、
+##      奖励连锁（多轮评估）、三档分档、发放台账持久化往返；
+##   4) 存档往返：存档含 achievements / achievement_rewards 字段且 save → load 一致。
 ## 运行方式：
 ##   Godot_v4.7.2-stable_win64_console.exe --headless --path <工程目录> res://tests/sim_steam.tscn
 
@@ -15,10 +17,11 @@ func _ready() -> void:
 	print("==================== 废料引擎 · Steam 集成自测 ====================")
 	_test_degrade_safety()
 	_test_achievements()
+	_test_stage8_rewards()
 	_test_save_roundtrip()
 	print("==================================================================")
 	if _fails == 0:
-		print("[PASS] Steam 集成自测全部通过（降级安全 · 成就规则 · 存档往返）。")
+		print("[PASS] Steam 集成自测全部通过（降级安全 · 成就规则 · 成就奖励闭环 · 存档往返）。")
 	else:
 		print("[FAIL] 存在 %d 项断言失败。" % _fails)
 	# 测试会消耗真实存档数值，退出前把状态清干净
@@ -147,10 +150,82 @@ func _test_achievements() -> void:
 
 	print("  成就进度 %d / %d" % [Achievements.progress()[0], Achievements.progress()[1]])
 
-# ---------------- 3) 存档往返 ----------------
+# ---------------- 3) 成就奖励闭环（阶段八） ----------------
+
+func _test_stage8_rewards() -> void:
+	print("\n---- 3) 成就奖励闭环 ----")
+	GameState.reset_new_game()
+	GameState.achievements.clear()
+	GameState.achievement_rewards.clear()
+
+	# 3.1 奖励表完整性：每条成就都有奖励，且不含未知成就 id
+	var missing := 0
+	for a in Achievements.defs:
+		if not Achievements.has_reward(str(a["id"])):
+			missing += 1
+	_check(missing == 0, "每条成就都有奖励定义（缺失 %d）" % missing)
+	var unknown := 0
+	for id in Achievements.reward_map.keys():
+		if Achievements.def_of(str(id)).is_empty():
+			unknown += 1
+	_check(unknown == 0, "奖励表不含未知成就 id（%d 个）" % unknown)
+
+	# 3.2 解锁即自动发放 + 台账记录（直接推统计，避免混入交易收益，精确断言发奖额度）
+	GameState.stats["sold"] = 1
+	var before: int = GameState.credits
+	Achievements.evaluate()
+	_check(Achievements.is_unlocked("first_sell"), "first_sell 解锁")
+	var rew: Dictionary = Achievements.reward_of("first_sell")
+	var rc := int(rew.get("credits", 0))
+	_check(GameState.credits == before + rc, "解锁即自动发放：信用点 +%d（实得 %d）" % [rc, GameState.credits - before])
+	_check(Achievements.is_rewarded("first_sell"), "奖励台账已记录 first_sell")
+
+	# 3.3 幂等：重复评估不重复发放
+	var after: int = GameState.credits
+	Achievements.evaluate()
+	Achievements.evaluate()
+	_check(GameState.credits == after, "重复评估不重复发放（信用点仍为 %d）" % GameState.credits)
+
+	# 3.4 奖励连锁：后位成就的奖励把余额推过前位成就的门槛 → 多轮评估内一并解锁。
+	#     credits_10k 在 JSON 中位于 calibrator_max 之前，单轮评估会漏掉，借此验证多轮逻辑。
+	GameState.reset_new_game()
+	GameState.achievements.clear()
+	GameState.achievement_rewards.clear()
+	GameState.credits = 9500
+	GameState.calibrator_level = int(GameData.calibrator.get("max_level", 5))
+	Achievements.evaluate()
+	_check(Achievements.is_unlocked("calibrator_max"), "calibrator_max 解锁")
+	_check(Achievements.is_unlocked("credits_10k"), "奖励连锁：同一次评估内推过门槛解锁 credits_10k")
+	_check(GameState.credits == 9500 + 1200 + 1000, "连锁发放后余额 = 9500+1200+1000 = %d" % GameState.credits)
+
+	# 3.5 分档：3 档，条目不重不漏，合计 = 总数
+	var bands: Array = Achievements.bands()
+	_check(bands.size() == Achievements.BAND_COUNT, "成就分 %d 档" % Achievements.BAND_COUNT)
+	var band_sum := 0
+	var band_ids := {}
+	for b in bands:
+		band_sum += int(b["total"])
+		for id in b["ids"]:
+			band_ids[str(id)] = true
+	_check(band_sum == Achievements.total(), "三档条目合计 = 总数 %d" % Achievements.total())
+	_check(band_ids.size() == Achievements.total(), "分档不重不漏（%d 条 id）" % band_ids.size())
+
+	# 3.6 台账往返：内存清空 → 重载恢复
+	GameState.save_game()
+	var snap: Dictionary = GameState.achievement_rewards.duplicate(true)
+	_check(snap.size() > 0, "台账有记录（%d 条）" % snap.size())
+	GameState.achievement_rewards = {}
+	_check(GameState.load_game(), "重载存档成功")
+	var same := GameState.achievement_rewards.size() == snap.size()
+	for k in snap:
+		if not GameState.achievement_rewards.has(k):
+			same = false
+	_check(same, "achievement_rewards 往返一致（%d 条）" % snap.size())
+
+# ---------------- 4) 存档往返 ----------------
 
 func _test_save_roundtrip() -> void:
-	print("\n---- 3) 存档往返 ----")
+	print("\n---- 4) 存档往返 ----")
 	GameState.save_game()
 	var txt := FileAccess.get_file_as_string(GameState.SAVE_PATH)
 	var d: Variant = JSON.parse_string(txt)
@@ -159,6 +234,7 @@ func _test_save_roundtrip() -> void:
 		var dd: Dictionary = d
 		_check(int(dd.get("version", 0)) >= 2, "存档 version >= 2")
 		_check(dd.has("achievements"), "存档含 achievements 字段")
+		_check(dd.has("achievement_rewards"), "存档含 achievement_rewards 字段")
 
 	var snapshot: Dictionary = GameState.achievements.duplicate(true)
 	_check(snapshot.size() > 0, "至少解锁一条成就（%d）" % snapshot.size())

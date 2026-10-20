@@ -1,0 +1,24 @@
+{
+	"_note": "成就奖励表（阶段八新增）：成就 id -> 奖励。achievements.json 一字不改。解锁即自动发放一次，台账见存档 achievement_rewards 字段。奖励只发信用点与体力，不投放物品，避免冲击既有经济与晋升曲线。",
+	"rewards": {
+		"first_open":        { "credits": 100 },
+		"open_100":          { "credits": 800, "energy": 1 },
+		"first_dismantle":   { "credits": 100 },
+		"first_promote":     { "credits": 120 },
+		"first_success":     { "credits": 200 },
+		"success_10":        { "credits": 600, "energy": 1 },
+		"first_breakdown":   { "credits": 250 },
+		"first_sell":        { "credits": 150 },
+		"credits_10k":       { "credits": 1000 },
+		"first_repair":      { "credits": 150 },
+		"first_refurbish":   { "credits": 150 },
+		"codex_10":          { "credits": 250 },
+		"codex_half":        { "credits": 700 },
+		"codex_all":         { "credits": 2500, "energy": 2 },
+		"family_mech_all":   { "credits": 500 },
+		"family_bio_all":    { "credits": 500 },
+		"family_data_all":   { "credits": 500 },
+		"own_t5":            { "credits": 900 },
+		"calibrator_max":    { "credits": 1200, "energy": 2 }
+	}
+}

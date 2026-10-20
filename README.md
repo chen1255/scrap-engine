@@ -44,6 +44,7 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 设置 | 侧栏「设置」页：主音量 / 音效音量 / BGM 音量、音效与 BGM 开关、全屏与分辨率、界面字号（4 档）、色盲友好配色；改动即时生效并落盘 `scrap_settings.cfg` |
 | 存档槽位 | 3 个独立槽位（1 号沿用旧文件名，向后兼容）；每个槽独立保存进度，可与 Steam 云存档按槽位名联动 |
 | 目标 | 侧栏「目标」页：16 条作业目标（`data/goals.json`），达成条件用 7 种规则类型描述，与成就共用同一套判定引擎；达成后手动领取奖励（信用点 / 体力 / 物品），可领取时导航项与卡片同步高亮 |
+| 成就奖励 | 19 条成就（`data/achievements.json`）**解锁即自动发放**奖励（`data/achievement_rewards.json`，仅信用点 / 体力），发放台账写入存档防重复；成就页按 JSON 顺序三等分展示分档进度、奖励预览与「已发放」标记。与目标相反：成就自动发奖、目标手动领取 |
 | 新手引导 | 5 步教练卡（`data/onboarding.json`）：每步 = 一句说明 + 对应视图 + 可选的推进规则，满足规则或点「下一步」即推进，全程可「跳过引导」；进度写进存档，只对真正的新档弹一次 |
 
 ### 数据规模
@@ -60,6 +61,8 @@ Godot 4.7.2 · GDScript · 内置可选 Steam 集成 · 无 Steam / 无 addon �
 | 核心催化 | 3 个 T4 核心可作催化剂；每次晋升最多投入 1 个（`recipes.json` 的 `catalyst` 块），加成沿用核心自带的 `catalyst_bonus` = 15 权重点 |
 | 品相档位 | 5 |
 | 目标 | 16（7 类达成规则：次数 / 信用点 / 图鉴收录 / 族系收齐 / 持有阶次 / 校准器等级 / 校准器满级） |
+| 成就 | 19（条件规则数据驱动；解锁即自动发放奖励，台账防重复） |
+| 成就奖励 | 19（`data/achievement_rewards.json`，合计约 ₡10670 + 6 体力，仅信用点 / 体力） |
 | 引导步骤 | 5 |
 
 所有数值均为纯数据驱动，改 JSON 即改玩法，无需碰代码。
@@ -77,6 +80,7 @@ scrap-engine/
 │   ├── loot_tables.json     #   黑市盲盒掉落表
 │   ├── recipes.json         #   晋升配方、道具、校准器、维修台（精修 / 翻新）、核心催化
 │   ├── achievements.json    #   19 条成就定义（条件规则数据驱动）
+│   ├── achievement_rewards.json # 19 条成就的奖励映射（成就 id → 信用点 / 体力；解锁即自动发放）
 │   ├── goals.json           #   16 条目标定义（与成就共用同一套规则引擎）
 │   ├── onboarding.json      #   5 步新手引导：说明 + 目标视图 + 推进规则
 │   ├── traits.json          #   词条池
@@ -149,7 +153,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 | `calibrator_level` | 概率校准器升到指定等级 |
 | `calibrator_max` | 概率校准器满级 |
 
-达成后到「目标」页点「领取奖励」发放奖励（信用点 / 体力 / 物品），奖励总量约 ₡6550 + 6 体力 + 2 件 T1 材料；可领取时导航项显示 `● n` 计数，卡片按「可领取 / 推荐下一步 / 进行中 / 已完成」四态区分。目标与领取状态都写进存档（存档 `version` 3），换槽 / 重载 / 云存档都跟着走。
+达成后到「目标」页点「领取奖励」发放奖励（信用点 / 体力 / 物品），奖励总量约 ₡6550 + 6 体力 + 2 件 T1 材料；可领取时导航项显示 `● n` 计数，卡片按「可领取 / 推荐下一步 / 进行中 / 已完成」四态区分。目标与领取状态都写进存档（存档 `version` 4），换槽 / 重载 / 云存档都跟着走。
 
 **新手引导** —— 5 步教练卡，定义在 `data/onboarding.json`：每步 = 一句说明 + 要看的视图 + 可选的「推进规则」（规则类型与目标完全一致）。
 
@@ -188,15 +192,27 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 - **默认逐位不变** —— 五个消费点全部写成「效果为 0 时公式恒等」（×1.0 / +0 / `clampi(x+0)`）；无词条或效果为 0 的物品，行为与既有版本逐位一致，`sim_rates` 有专门的对照断言兜底。
 - **UI 可见** —— 全息检视面板在每条词条下标注「效果：…」并按正 / 负着色；熔炉抽签表标注本次材料词条乘数；维修台标注精修 / 翻新词条加成；交易所卖价自动含词条乘数。
 
+### 成就奖励闭环
+
+在阶段八之前，19 条 Steam 成就只做一件事：解锁。而解锁本身除了点亮一个星标、往 Steam 推一次尽力同步外，**没有任何回报**——玩家把图鉴收齐、把校准器点满，拿到的是一个「已解锁」的勾，而不是任何能让循环继续转下去的东西。**成就奖励闭环**把这份「只解锁、无回报」补上：
+
+- **解锁即自动发放** —— 成就解锁的瞬间，按新增的 `data/achievement_rewards.json`（成就 id → 奖励）把奖励直接打进账户，并弹一条 toast 一并播报「成就解锁 + 奖励明细」。**与目标刻意相反**：目标保留「达成后手动领取」的选择感，成就则是即时兑现的荣誉打赏，两者的体验由此区分开。
+- **多轮评估兜底连锁** —— 一笔奖励可能把信用点余额推过另一条成就的门槛（例如后位成就的奖励把余额顶过 `credits_10k`）。`Achievements.evaluate()` 因此改为**多轮评估**：一轮内若仍有新解锁就再跑一轮，直到一轮无新解锁为止，连锁在同一帧内一次性结清。
+- **奖励只看数据** —— `achievements.json` **一字不改**，奖励全部写在新文件里；奖励只发信用点与体力，不投放任何物品，因此既有掉落表、配方、价格与晋升曲线逐位不受影响。19 条奖励合计约 ₡10670 + 6 体力。
+- **分档进度** —— 成就页在总进度条下按 `achievements.json` 的 **JSON 顺序三等分**再列出三条分档进度（每档「已解锁 x / y」+ 进度条），并给每条成就加上**奖励预览**与「✓ 已发放」标记；隐藏成就未解锁时不剧透奖励（显示「奖励 ？？」）。
+- **台账防重复** —— 已发放的成就记进存档新增字段 `achievement_rewards`（成就 id → true），发放逻辑幂等，重复评估绝不重复发奖；隐藏成就、旧档兼容、换槽 / 重载 / 云存档都跟着走（存档 `version` 3 → 4，新字段缺省为空字典，旧档安全）。
+
+> 说明：老档中**在阶段八之前就已解锁**的成就视为「已结算」，不追溯补发奖励——保证读档行为与既有版本逐位一致（不会在读档时凭空多出一笔钱）。此后新解锁的成就正常即时发放。
+
 ### Steam 集成（可选）
 
 内置 **GodotSteam GDExtension v4.23.1**（Steamworks），提供三项可选能力；**缺少 addon 或未运行 Steam 客户端时自动降级，界面显示「不可用 + 原因」，游戏照常可玩**：
 
 | 能力 | 说明 |
 |---|---|
-| 成就 | 19 条成就，定义在 `data/achievements.json`（条件规则数据驱动）；**本地存档为权威解锁状态**，Steam 侧仅做尽力同步 |
+| 成就 | 19 条成就，定义在 `data/achievements.json`（条件规则数据驱动）；解锁即自动发放 `data/achievement_rewards.json` 中的奖励（信用点 / 体力）；**本地存档为权威解锁状态**，Steam 侧仅做尽力同步 |
 | 云存档 | 上传 / 下载 `scrap_engine_save.json`，支持「存档后自动上传」；下载遵循「新者优先」冲突策略 |
-| 状态面板 | 侧栏「对接 Steam」页：账号 / App ID / 云配额 / 云端与本地文件信息 + 成就列表（含进度） |
+| 状态面板 | 侧栏「对接 Steam」页：账号 / App ID / 云配额 / 云端与本地文件信息 + 成就列表（含**分档进度、奖励预览与「已发放」标记**） |
 
 - **App ID**：默认读取根目录 `steam_appid.txt`（默认 `480`，即 Valve 公共测试 app *Spacewar*）。发布时替换为自有 App ID，并在 Steamworks 后台定义同名成就（`ACH_*`）即可完整生效。
 - **addon 来源**：`addons/godotsteam/`（已入库全平台二进制）。升级或补拉：
@@ -215,7 +231,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_rates.tscn
 ```
 
-Steam 集成自测（降级安全 / 成就规则 / 存档往返），同样以 `[PASS]` + 退出码 0 表示通过；**缺少 addon 时该自测也必须通过**：
+Steam 集成自测（降级安全 / 成就规则 / **成就奖励闭环：奖励表完整、解锁即自动发放、幂等、奖励连锁多轮评估、三档分档、发放台账往返** / 存档往返），同样以 `[PASS]` + 退出码 0 表示通过；**缺少 addon 时该自测也必须通过**：
 
 ```powershell
 Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tests/sim_steam.tscn
@@ -252,6 +268,7 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 | 阶段五 | 作业目标（14 条，判定规则与 Steam 成就共用一套引擎）+ 新手引导（5 步教练卡，可跳过、只对新档弹一次） | 完成 |
 | 阶段六 | 核心催化：熔炉晋升可额外投入 1 个核心，把写明的成功率加成兑现（`catalyst_bonus` → 权重点，与过载催化剂同语义），核心随即被消耗；目标 14 → 16，默认爆率逐位不变 | 完成 |
 | 阶段七 | 词条玩法闭环：把 24 条「只在检视面板展示」的词条按既有描述语义接进玩法（晋升成功率 / 精修 / 翻新 / 拆解产出 / 售出价格 五处修正），效果映射表写在新增 `data/trait_effects.json`，`traits.json` 一字不改，无词条时逐位不变 | 完成 |
+| 阶段八 | 成就奖励闭环：19 条成就解锁即自动发放奖励（新增 `data/achievement_rewards.json`，仅信用点 / 体力），多轮评估兜底连锁解锁，成就页按 JSON 顺序三等分做分档进度 + 奖励预览 + 已发放标记，存档加发放台账防重复（`version` 4）；`achievements.json` 一字不改，无奖励时逐位不变 | 完成 |
 
 开发期截图工具（需要渲染设备，不能 `--headless`）：
 
@@ -305,6 +322,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Settings | A "Settings" view: master / SFX / BGM volume, SFX & BGM toggles, fullscreen and resolution, UI font scale (4 steps), and a colorblind-friendly palette; changes apply instantly and persist to `scrap_settings.cfg` |
 | Save slots | 3 independent slots (slot 1 keeps the legacy filename for backward compatibility); each holds its own progress and maps to a Steam cloud filename per slot |
 | Goals | A "Goals" view: 16 objectives (`data/goals.json`) described by 7 rule types, sharing **one rules engine with the Steam achievements**; rewards (credits / energy / items) are claimed manually, and the nav item flags what is claimable |
+| Achievement rewards | 19 achievements (`data/achievements.json`) **auto-pay their reward on unlock** (`data/achievement_rewards.json`, credits / energy only), with a payout ledger saved to prevent duplicates; the achievements page splits them into three bands (JSON order) showing tiered progress, reward previews, and a "paid" mark. The mirror image of goals: achievements pay automatically, goals are claimed by hand |
 | Onboarding | A 5-step coach card (`data/onboarding.json`): each step is a line of text + a target view + an optional advance rule, advanced either by the rule or by "Next", and skippable at any point; progress is saved and only ever shown to a genuinely new save |
 
 | Content | Count |
@@ -319,6 +337,8 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Core catalyst | 3 T4 cores usable as catalysts; at most 1 per promotion (`catalyst` block in `recipes.json`), bonus comes from the core's own `catalyst_bonus` = 15 weight points |
 | Condition grades | 5 |
 | Goals | 16 (7 rule types: counters / credits / codex count / family complete / own tier / calibrator level / calibrator maxed) |
+| Achievements | 19 (rule-driven; reward paid automatically on unlock, ledger-guarded against duplicates) |
+| Achievement rewards | 19 (`data/achievement_rewards.json`; roughly ₡10670 + 6 energy total, credits / energy only) |
 | Onboarding steps | 5 |
 
 Everything is data-driven: change the JSON, change the game — no code edits needed.
@@ -371,7 +391,7 @@ The "Settings" view centralizes: master / SFX / BGM volume sliders, SFX & BGM to
 | `calibrator_level` | Probability calibrator at a given level |
 | `calibrator_max` | Probability calibrator maxed out |
 
-Completed objectives are paid out with the "Claim" button on the Goals view (credits / energy / items — roughly ₡6550 + 6 energy + 2 T1 materials in total), and while anything is claimable the nav item carries a `● n` counter. Objective and claim state is saved (save `version` 3), so it travels with slot switching, reloads, and cloud saves.
+Completed objectives are paid out with the "Claim" button on the Goals view (credits / energy / items — roughly ₡6550 + 6 energy + 2 T1 materials in total), and while anything is claimable the nav item carries a `● n` counter. Objective and claim state is saved (save `version` 4), so it travels with slot switching, reloads, and cloud saves.
 
 **Onboarding** — a 5-step coach card defined in `data/onboarding.json`: each step is a line of text + a view to look at + an optional advance rule (same rule types as the goals).
 

@@ -63,6 +63,7 @@ func _connect_systems() -> void:
 	MarketSystem.prices_changed.connect(_on_prices_changed)
 	Objectives.goal_completed.connect(_on_goal_completed)
 	Objectives.goals_changed.connect(_refresh_goals_badge)
+	Achievements.achievement_unlocked.connect(_on_achievement_unlocked)
 	Onboarding.step_changed.connect(_on_onboarding_step)
 	Onboarding.finished.connect(_on_onboarding_finished)
 
@@ -75,6 +76,7 @@ func _disconnect_systems() -> void:
 	MarketSystem.prices_changed.disconnect(_on_prices_changed)
 	Objectives.goal_completed.disconnect(_on_goal_completed)
 	Objectives.goals_changed.disconnect(_refresh_goals_badge)
+	Achievements.achievement_unlocked.disconnect(_on_achievement_unlocked)
 	Onboarding.step_changed.disconnect(_on_onboarding_step)
 	Onboarding.finished.disconnect(_on_onboarding_finished)
 
@@ -613,3 +615,13 @@ func _on_onboarding_finished() -> void:
 func _on_goal_completed(_id: String, def: Dictionary) -> void:
 	Sfx.play("trade")
 	show_toast("目标达成：%s —— 到「目标」页领取奖励" % str(def.get("name", "")))
+
+## 成就解锁即自动发放奖励（阶段八）：播报解锁的同时把奖励一并告知玩家。
+func _on_achievement_unlocked(id: String, def: Dictionary) -> void:
+	var msg := "成就解锁：%s" % str(def.get("name", id))
+	var rew := Achievements.reward_of(id)
+	if not rew.is_empty():
+		msg += " · 奖励 " + GameState.reward_text(rew)
+	show_toast(msg)
+	if _current == "steam" and _views.has("steam") and (_views["steam"] as Control).has_method("refresh"):
+		_views["steam"].refresh()

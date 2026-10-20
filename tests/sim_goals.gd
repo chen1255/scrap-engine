@@ -110,12 +110,18 @@ func _test_goal_lifecycle() -> void:
 	_check(not bool(Objectives.claim("g_codex_all").get("ok", false)), "未达成目标不可领取")
 	_check(not bool(Objectives.claim("no_such_goal").get("ok", false)), "未知目标不可领取")
 
-	# 领取：信用点应增加目标奖励的额度
+	# 领取：目标自身应发放奖励的额度
+	# 注意：阶段八起成就解锁会「自动发奖」，而领取动作会推高信用点 → 可能顺带解锁成就并追加奖励，
+	# 故这里只断言「本次领取发放的额度」与「余额不低于目标奖励额」，不要求余额精确等于 before+奖励。
 	var before: int = GameState.credits
 	var rew: Dictionary = Objectives.reward_of("g_open_first")
 	var r: Dictionary = Objectives.claim("g_open_first")
 	_check(bool(r.get("ok", false)), "达成目标可领取")
-	_check(GameState.credits == before + int(rew.get("credits", 0)), "领取后信用点 +%d" % int(rew.get("credits", 0)))
+	var got: Dictionary = r.get("got", {})
+	_check(int(got.get("credits", 0)) == int(rew.get("credits", 0)),
+		"领取发放目标奖励信用点 +%d（实发 %d）" % [int(rew.get("credits", 0)), int(got.get("credits", 0))])
+	_check(GameState.credits >= before + int(rew.get("credits", 0)),
+		"领取后信用点不低于 +%d（现 %d）" % [int(rew.get("credits", 0)), GameState.credits])
 	_check(Objectives.is_claimed("g_open_first"), "领取后标记为已领取")
 	_check(not bool(Objectives.claim("g_open_first").get("ok", false)), "同一目标不可重复领取")
 

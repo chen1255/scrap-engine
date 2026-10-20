@@ -22,6 +22,7 @@ var energy: int = START_ENERGY
 var inventory: Dictionary = {}        # item_id -> { "n": 数量, "cs": 保养度总和 }
 var codex: Dictionary = {}            # item_id -> true 表示已发现
 var achievements: Dictionary = {}     # achievement_id -> true 表示已解锁（本地权威）
+var achievement_rewards: Dictionary = {}   # achievement_id -> true 表示该成就的奖励已发放（阶段八台账，防重复）
 var goals: Dictionary = {}            # goal_id -> { "done": true, "claimed": true }
 var tutorial: Dictionary = { "done": false, "step": 0 }   # 新手引导：是否已完成 / 当前步骤
 var calibrator_level: int = 0         # 概率校准器等级
@@ -45,6 +46,7 @@ func reset_new_game() -> void:
 	inventory.clear()
 	codex.clear()
 	achievements.clear()
+	achievement_rewards.clear()
 	goals.clear()
 	# 注意：tutorial 不在此清除 —— 引导只对「真正的新档」弹一次，重置存档不重复打扰。
 	pity.clear()
@@ -88,6 +90,42 @@ func buy_energy() -> bool:
 		return false
 	add_energy(1)
 	return true
+
+# ---------------- 奖励发放（目标 / 成就共用） ----------------
+
+## 发放一份奖励（信用点 / 体力 / 物品），返回实发内容摘要 { credits, energy, items: [{id, n}] }。
+## 目标领取与成就解锁共用这一条发放路径，避免两处规则漂移。
+func grant_reward(reward: Dictionary) -> Dictionary:
+	var got: Dictionary = {}
+	var cr := int(reward.get("credits", 0))
+	if cr > 0:
+		add_credits(cr)
+		got["credits"] = cr
+	var en := int(reward.get("energy", 0))
+	if en > 0:
+		add_energy(en)
+		got["energy"] = en
+	var listed: Array = []
+	for it in reward.get("items", []):
+		var iid := str(it.get("id", ""))
+		var n := int(it.get("n", 1))
+		if iid != "" and n > 0:
+			add_item(iid, n)
+			listed.append({ "id": iid, "n": n })
+	if listed.size() > 0:
+		got["items"] = listed
+	return got
+
+## 把一份奖励描述成一行中文文案（供 toast / 卡片）。无内容时返回空串。
+func reward_text(reward: Dictionary) -> String:
+	var parts := PackedStringArray()
+	if int(reward.get("credits", 0)) > 0:
+		parts.append("₡%d" % int(reward.get("credits", 0)))
+	if int(reward.get("energy", 0)) > 0:
+		parts.append("⚡%d" % int(reward.get("energy", 0)))
+	for it in reward.get("items", []):
+		parts.append("%s ×%d" % [GameData.item_name(str(it.get("id", ""))), int(it.get("n", 1))])
+	return "、".join(parts)
 
 # ---------------- 库存 ----------------
 
@@ -288,12 +326,13 @@ func delete_slot(n: int) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": 3,
+		"version": 4,
 		"credits": credits,
 		"energy": energy,
 		"inventory": inventory,
 		"codex": codex,
 		"achievements": achievements,
+		"achievement_rewards": achievement_rewards,
 		"goals": goals,
 		"tutorial": tutorial,
 		"calibrator_level": calibrator_level,
@@ -324,6 +363,7 @@ func load_game() -> bool:
 	_normalize_inventory()
 	codex = d.get("codex", {})
 	achievements = d.get("achievements", {})   # 旧存档（version 1）缺该字段时按空字典兼容
+	achievement_rewards = d.get("achievement_rewards", {})   # 旧存档（version < 4）缺该字段时按空字典兼容
 	goals = d.get("goals", {})                 # 旧存档缺 goals / tutorial 时按空值兼容
 	var tut: Variant = d.get("tutorial", {})
 	tutorial = tut if typeof(tut) == TYPE_DICTIONARY else { "done": false, "step": 0 }
