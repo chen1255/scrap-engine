@@ -6,7 +6,7 @@ extends Node
 ## 阶段八起接入「成就奖励闭环」：解锁的瞬间按 data/achievement_rewards.json 自动发放奖励一次，
 ## 发放台账写入存档 achievement_rewards 字段（幂等，防重复）。奖励数据独立成文件，achievements.json 一字不改。
 
-signal achievement_unlocked(id: String, def: Dictionary)
+signal achievement_unlocked(id: String, def: Dictionary, got: Dictionary)   # got = 本次实发摘要（供 toast 播报实到数额）
 
 const DATA_PATH := "res://data/achievements.json"
 const REWARDS_PATH := "res://data/achievement_rewards.json"
@@ -78,20 +78,22 @@ func evaluate() -> void:
 			break
 	_busy = false
 
-## 解锁：写入权威状态 → 自动发放奖励（若有且未发放过）→ 存档 → 广播。
+## 解锁：写入权威状态 → 自动发放奖励（若有且未发放过）→ 存档 → 广播（带上实发摘要）。
 func _unlock(id: String, def: Dictionary) -> void:
 	GameState.achievements[id] = true
-	_grant_reward(id)
+	var got := _grant_reward(id)
 	GameState.save_game()
-	achievement_unlocked.emit(id, def)
+	achievement_unlocked.emit(id, def, got)
 
 ## 按奖励表发放一次奖励并记账（幂等：已发放过则跳过）。无奖励定义时静默跳过。
-func _grant_reward(id: String) -> void:
+## 返回实发摘要（体力受上限钳制，可能少于声明值），供播报「实到」而非「声明」数额。
+func _grant_reward(id: String) -> Dictionary:
 	var reward: Dictionary = reward_of(id)
 	if reward.is_empty() or GameState.achievement_rewards.has(id):
-		return
-	GameState.grant_reward(reward)
-	GameState.achievement_rewards[id] = true
+		return {}
+	var got := GameState.grant_reward(reward)
+	GameState.achievement_rewards[id] = got   # 台账记「实发摘要」（非 true），供概览按实到合计；旧档遗留 true 由 rewarded_totals 回退声明值
+	return got
 
 ## 达成判定统一交给共享规则引擎 Rules（与 Objectives 共用同一套语义）。
 func _meets(def: Dictionary) -> bool:
@@ -141,16 +143,20 @@ func is_rewarded(id: String) -> bool:
 	return GameState.achievement_rewards.has(id)
 
 ## 已发放奖励合计：{ count, credits, energy }，供成就页概览展示。
+## 阶段八起台账存「实发摘要」，因此这里按**实到数额**合计：被体力上限吞掉的部分不计入，概览不再虚报。
+## 旧档台账值为 true（只记标记、无实发数额）时回退按声明值计。
 func rewarded_totals() -> Dictionary:
 	var out := { "count": 0, "credits": 0, "energy": 0 }
 	for a in defs:
 		var id := str(a["id"])
 		if not is_rewarded(id):
 			continue
-		var rew := reward_of(id)
 		out["count"] = int(out["count"]) + 1
-		out["credits"] = int(out["credits"]) + int(rew.get("credits", 0))
-		out["energy"] = int(out["energy"]) + int(rew.get("energy", 0))
+		var v: Variant = GameState.achievement_rewards.get(id, null)
+		# 字典 = 本档实发摘要（按实到计）；其它值（旧档 true）= 无实发数额，回退声明值
+		var src: Dictionary = v if typeof(v) == TYPE_DICTIONARY else reward_of(id)
+		out["credits"] = int(out["credits"]) + int(src.get("credits", 0))
+		out["energy"] = int(out["energy"]) + int(src.get("energy", 0))
 	return out
 
 ## 成就分档：按 achievements.json 的 JSON 顺序三等分，返回每档 { index, name, unlocked, total, ids }。

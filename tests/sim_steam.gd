@@ -4,7 +4,8 @@ extends Node
 ##      都不崩溃；不可用时各接口安全返回 no-op；
 ##   2) 成就规则：脚本化触发一串玩法事件，断言成就按 data/achievements.json 的规则正确解锁；
 ##   3) 成就奖励闭环：data/achievement_rewards.json 完整性、解锁即自动发放、幂等、
-##      奖励连锁（多轮评估）、三档分档、发放台账持久化往返；
+##      实发数额记账（满体力被上限吞掉的部分不计入概览合计）、奖励连锁（多轮评估）、
+##      三档分档、发放台账持久化往返；
 ##   4) 存档往返：存档含 achievements / achievement_rewards 字段且 save → load 一致。
 ## 运行方式：
 ##   Godot_v4.7.2-stable_win64_console.exe --headless --path <工程目录> res://tests/sim_steam.tscn
@@ -179,6 +180,11 @@ func _test_stage8_rewards() -> void:
 	var rc := int(rew.get("credits", 0))
 	_check(GameState.credits == before + rc, "解锁即自动发放：信用点 +%d（实得 %d）" % [rc, GameState.credits - before])
 	_check(Achievements.is_rewarded("first_sell"), "奖励台账已记录 first_sell")
+	var led: Variant = GameState.achievement_rewards.get("first_sell", null)
+	_check(typeof(led) == TYPE_DICTIONARY and int((led as Dictionary).get("credits", 0)) == rc,
+		"台账存「实发摘要」而非 true（credits=%d）" % rc)
+	var tot_now := Achievements.rewarded_totals()
+	_check(int(tot_now["credits"]) == rc, "rewarded_totals 按实到合计信用点（₡%d）" % int(tot_now["credits"]))
 
 	# 3.3 幂等：重复评估不重复发放
 	var after: int = GameState.credits
@@ -186,7 +192,25 @@ func _test_stage8_rewards() -> void:
 	Achievements.evaluate()
 	_check(GameState.credits == after, "重复评估不重复发放（信用点仍为 %d）" % GameState.credits)
 
-	# 3.4 奖励连锁：后位成就的奖励把余额推过前位成就的门槛 → 多轮评估内一并解锁。
+	# 3.4 实到数额记账：体力有上限（MAX_ENERGY），满体力时实发摘要按实到记，不虚报声明值
+	GameState.energy = GameState.MAX_ENERGY
+	var got_cap: Dictionary = GameState.grant_reward({ "energy": 2, "credits": 30 })
+	_check(not got_cap.has("energy"), "满体力（%d）时实发摘要不含体力" % GameState.MAX_ENERGY)
+	_check(int(got_cap.get("credits", 0)) == 30, "信用点不受上限影响（实发 %d）" % int(got_cap.get("credits", 0)))
+	GameState.energy = 0
+	var got_low: Dictionary = GameState.grant_reward({ "energy": 2 })
+	_check(int(got_low.get("energy", 0)) == 2 and GameState.energy == 2, "非满体力时体力按声明值实发（到账 %d）" % GameState.energy)
+
+	# 3.4b 概览合计按「实发摘要」合计：被上限吞掉的体力不计入，不虚报；旧档 true 条目回退声明值
+	_check(int(Achievements.rewarded_totals()["energy"]) == 0,
+		"rewarded_totals 不计未到账体力（⚡%d）" % int(Achievements.rewarded_totals()["energy"]))
+	GameState.achievements["first_open"] = true
+	GameState.achievement_rewards["first_open"] = true   # 模拟旧档：只记标记、无实发数额
+	var tot_legacy := Achievements.rewarded_totals()
+	_check(int(tot_legacy["credits"]) == 150 + 100, "旧档台账 true 回退按声明值合计（₡%d）" % int(tot_legacy["credits"]))
+	_check(int(tot_legacy["count"]) == 2, "概览计数按台账条目数（%d 条）" % int(tot_legacy["count"]))
+
+	# 3.5 奖励连锁：后位成就的奖励把余额推过前位成就的门槛 → 多轮评估内一并解锁。
 	#     credits_10k 在 JSON 中位于 calibrator_max 之前，单轮评估会漏掉，借此验证多轮逻辑。
 	GameState.reset_new_game()
 	GameState.achievements.clear()
@@ -198,7 +222,7 @@ func _test_stage8_rewards() -> void:
 	_check(Achievements.is_unlocked("credits_10k"), "奖励连锁：同一次评估内推过门槛解锁 credits_10k")
 	_check(GameState.credits == 9500 + 1200 + 1000, "连锁发放后余额 = 9500+1200+1000 = %d" % GameState.credits)
 
-	# 3.5 分档：3 档，条目不重不漏，合计 = 总数
+	# 3.6 分档：3 档，条目不重不漏，合计 = 总数
 	var bands: Array = Achievements.bands()
 	_check(bands.size() == Achievements.BAND_COUNT, "成就分 %d 档" % Achievements.BAND_COUNT)
 	var band_sum := 0
@@ -210,7 +234,7 @@ func _test_stage8_rewards() -> void:
 	_check(band_sum == Achievements.total(), "三档条目合计 = 总数 %d" % Achievements.total())
 	_check(band_ids.size() == Achievements.total(), "分档不重不漏（%d 条 id）" % band_ids.size())
 
-	# 3.6 台账往返：内存清空 → 重载恢复
+	# 3.7 台账往返：内存清空 → 重载恢复
 	GameState.save_game()
 	var snap: Dictionary = GameState.achievement_rewards.duplicate(true)
 	_check(snap.size() > 0, "台账有记录（%d 条）" % snap.size())

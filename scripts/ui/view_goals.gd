@@ -144,7 +144,15 @@ func _claim(id: String) -> void:
 	var r: Dictionary = Objectives.claim(id)
 	if bool(r.get("ok", false)):
 		Sfx.play("trade")
-		toast_requested.emit("已领取奖励：" + Objectives.reward_text(r.get("reward", {})))
+		# 播报「实发」而非「声明」数额：体力有上限，满体力时可能一分没到账
+		var got: Dictionary = r.get("got", {})
+		var rew := Objectives.reward_of(id)
+		var got_txt: String = Objectives.reward_text(got)
+		if got_txt == "" and not rew.is_empty():
+			got_txt = "未到账（体力已满）"
+		elif int(rew.get("energy", 0)) > int(got.get("energy", 0)):
+			got_txt += "（体力已满，⚡未到账）"
+		toast_requested.emit("已领取奖励：" + got_txt)
 		refresh()
 	else:
 		Sfx.play_error()

@@ -196,11 +196,11 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . res://tools/gen_bgm.ts
 
 在阶段八之前，19 条 Steam 成就只做一件事：解锁。而解锁本身除了点亮一个星标、往 Steam 推一次尽力同步外，**没有任何回报**——玩家把图鉴收齐、把校准器点满，拿到的是一个「已解锁」的勾，而不是任何能让循环继续转下去的东西。**成就奖励闭环**把这份「只解锁、无回报」补上：
 
-- **解锁即自动发放** —— 成就解锁的瞬间，按新增的 `data/achievement_rewards.json`（成就 id → 奖励）把奖励直接打进账户，并弹一条 toast 一并播报「成就解锁 + 奖励明细」。**与目标刻意相反**：目标保留「达成后手动领取」的选择感，成就则是即时兑现的荣誉打赏，两者的体验由此区分开。
+- **解锁即自动发放** —— 成就解锁的瞬间，按新增的 `data/achievement_rewards.json`（成就 id → 奖励）把奖励直接打进账户，并弹一条 toast 一并播报「成就解锁 + **实到**奖励明细」（体力有上限，被上限吞掉的 ⚡ 会标注「未到账」）。**与目标刻意相反**：目标保留「达成后手动领取」的选择感，成就则是即时兑现的荣誉打赏，两者的体验由此区分开。
 - **多轮评估兜底连锁** —— 一笔奖励可能把信用点余额推过另一条成就的门槛（例如后位成就的奖励把余额顶过 `credits_10k`）。`Achievements.evaluate()` 因此改为**多轮评估**：一轮内若仍有新解锁就再跑一轮，直到一轮无新解锁为止，连锁在同一帧内一次性结清。
 - **奖励只看数据** —— `achievements.json` **一字不改**，奖励全部写在新文件里；奖励只发信用点与体力，不投放任何物品，因此既有掉落表、配方、价格与晋升曲线逐位不受影响。19 条奖励合计约 ₡10670 + 6 体力。
 - **分档进度** —— 成就页在总进度条下按 `achievements.json` 的 **JSON 顺序三等分**再列出三条分档进度（每档「已解锁 x / y」+ 进度条），并给每条成就加上**奖励预览**与「✓ 已发放」标记；隐藏成就未解锁时不剧透奖励（显示「奖励 ？？」）。
-- **台账防重复** —— 已发放的成就记进存档新增字段 `achievement_rewards`（成就 id → true），发放逻辑幂等，重复评估绝不重复发奖；隐藏成就、旧档兼容、换槽 / 重载 / 云存档都跟着走（存档 `version` 3 → 4，新字段缺省为空字典，旧档安全）。
+- **台账防重复** —— 已发放的成就记进存档新增字段 `achievement_rewards`（成就 id → 本次**实发摘要** `{ credits, energy, items }`），发放逻辑幂等，重复评估绝不重复发奖；成就页概览那行「已发放奖励」因此按**实到数额**合计，被体力上限吞掉的部分不计入、不虚报（旧档遗留的 `true` 值无实发数额，回退按声明值计）；隐藏成就、旧档兼容、换槽 / 重载 / 云存档都跟着走（存档 `version` 3 → 4，新字段缺省为空字典，旧档安全）。
 
 > 说明：老档中**在阶段八之前就已解锁**的成就视为「已结算」，不追溯补发奖励——保证读档行为与既有版本逐位一致（不会在读档时凭空多出一笔钱）。此后新解锁的成就正常即时发放。
 
@@ -322,7 +322,7 @@ Black market crates ──> Disassembly bench ──> Furnace promotion ──> 
 | Settings | A "Settings" view: master / SFX / BGM volume, SFX & BGM toggles, fullscreen and resolution, UI font scale (4 steps), and a colorblind-friendly palette; changes apply instantly and persist to `scrap_settings.cfg` |
 | Save slots | 3 independent slots (slot 1 keeps the legacy filename for backward compatibility); each holds its own progress and maps to a Steam cloud filename per slot |
 | Goals | A "Goals" view: 16 objectives (`data/goals.json`) described by 7 rule types, sharing **one rules engine with the Steam achievements**; rewards (credits / energy / items) are claimed manually, and the nav item flags what is claimable |
-| Achievement rewards | 19 achievements (`data/achievements.json`) **auto-pay their reward on unlock** (`data/achievement_rewards.json`, credits / energy only), with a payout ledger saved to prevent duplicates; the achievements page splits them into three bands (JSON order) showing tiered progress, reward previews, and a "paid" mark. The mirror image of goals: achievements pay automatically, goals are claimed by hand |
+| Achievement rewards | 19 achievements (`data/achievements.json`) **auto-pay their reward on unlock** (`data/achievement_rewards.json`, credits / energy only), with a payout ledger that records each achievement's **actual paid-out amounts** to prevent duplicates — so the page summary sums what really landed and never overstates energy swallowed by the cap (legacy `true` entries carry no amounts and fall back to the declared value); the achievements page splits them into three bands (JSON order) showing tiered progress, reward previews, and a "paid" mark. The mirror image of goals: achievements pay automatically, goals are claimed by hand |
 | Onboarding | A 5-step coach card (`data/onboarding.json`): each step is a line of text + a target view + an optional advance rule, advanced either by the rule or by "Next", and skippable at any point; progress is saved and only ever shown to a genuinely new save |
 
 | Content | Count |

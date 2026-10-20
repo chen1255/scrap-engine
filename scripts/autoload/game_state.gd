@@ -22,7 +22,7 @@ var energy: int = START_ENERGY
 var inventory: Dictionary = {}        # item_id -> { "n": 数量, "cs": 保养度总和 }
 var codex: Dictionary = {}            # item_id -> true 表示已发现
 var achievements: Dictionary = {}     # achievement_id -> true 表示已解锁（本地权威）
-var achievement_rewards: Dictionary = {}   # achievement_id -> true 表示该成就的奖励已发放（阶段八台账，防重复）
+var achievement_rewards: Dictionary = {}   # achievement_id -> 本次「实发」摘要 { credits, energy, items }（阶段八台账，防重复；旧档可能遗留 true）
 var goals: Dictionary = {}            # goal_id -> { "done": true, "claimed": true }
 var tutorial: Dictionary = { "done": false, "step": 0 }   # 新手引导：是否已完成 / 当前步骤
 var calibrator_level: int = 0         # 概率校准器等级
@@ -93,8 +93,10 @@ func buy_energy() -> bool:
 
 # ---------------- 奖励发放（目标 / 成就共用） ----------------
 
-## 发放一份奖励（信用点 / 体力 / 物品），返回实发内容摘要 { credits, energy, items: [{id, n}] }。
+## 发放一份奖励（信用点 / 体力 / 物品），返回「实发」内容摘要 { credits, energy, items: [{id, n}] }。
 ## 目标领取与成就解锁共用这一条发放路径，避免两处规则漂移。
+## 体力有上限（MAX_ENERGY）：满体力时体力部分会被钳制，这里按「实到数额」记账，
+## 调用方播报的数额因此与实际到账一致（信用点无上限，始终等于声明值）。
 func grant_reward(reward: Dictionary) -> Dictionary:
 	var got: Dictionary = {}
 	var cr := int(reward.get("credits", 0))
@@ -103,8 +105,11 @@ func grant_reward(reward: Dictionary) -> Dictionary:
 		got["credits"] = cr
 	var en := int(reward.get("energy", 0))
 	if en > 0:
+		var before_en := energy
 		add_energy(en)
-		got["energy"] = en
+		var real_en := energy - before_en   # 满体力时可能为 0（被上限钳制），则不记入实发摘要
+		if real_en > 0:
+			got["energy"] = real_en
 	var listed: Array = []
 	for it in reward.get("items", []):
 		var iid := str(it.get("id", ""))

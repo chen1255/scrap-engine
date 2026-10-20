@@ -616,12 +616,15 @@ func _on_goal_completed(_id: String, def: Dictionary) -> void:
 	Sfx.play("trade")
 	show_toast("目标达成：%s —— 到「目标」页领取奖励" % str(def.get("name", "")))
 
-## 成就解锁即自动发放奖励（阶段八）：播报解锁的同时把奖励一并告知玩家。
-func _on_achievement_unlocked(id: String, def: Dictionary) -> void:
+## 成就解锁即自动发放奖励（阶段八）：播报解锁的同时把「实到」奖励告知玩家。
+func _on_achievement_unlocked(id: String, def: Dictionary, got: Dictionary) -> void:
 	var msg := "成就解锁：%s" % str(def.get("name", id))
-	var rew := Achievements.reward_of(id)
-	if not rew.is_empty():
-		msg += " · 奖励 " + GameState.reward_text(rew)
+	if not got.is_empty():
+		msg += " · 奖励 " + GameState.reward_text(got)
+		if int(Achievements.reward_of(id).get("energy", 0)) > int(got.get("energy", 0)):
+			msg += "（体力已满，⚡未到账）"
+	elif Achievements.has_reward(id):
+		msg += " · 奖励未到账（体力已满）"
 	show_toast(msg)
 	if _current == "steam" and _views.has("steam") and (_views["steam"] as Control).has_method("refresh"):
 		_views["steam"].refresh()
