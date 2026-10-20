@@ -3,7 +3,16 @@ extends Node
 ## 并断言精修为确定性操作、核心催化只在投入且持有时才改权重。
 ## 运行方式：
 ##   Godot_v4.7.2-stable_win64_console.exe --headless --path <工程目录> res://tests/sim_rates.tscn
+##
+## 本测试是「有限样本」的分布检验：不固定种子时，同一个样本每次运行都会抖动，
+## 晋升 / 翻新两段的阈值（4% / 3%）距期望波动只有 3 个标准差左右，
+## 因此有约 5%~9% 的概率「假红」（配置与实现都没问题，只是抽到了偏样本）。
+## 固定随机种子后，按既有顺序运行自测的抽样序列稳定一致：绿灯一次即可稳定复现，
+## 只有配置或抽签实现真的漂移时才会变红。
+## （注意：抽样流的起点与「起始存档状态」相关，跨存档状态对比时个别段落会有零点几个
+##   百分点的偏移，仍远低于阈值。）
 
+const SEED := 20261020
 const CRATE_TRIALS := 20000
 const PROMOTE_TRIALS := 1500
 const REFURBISH_TRIALS := 3000
@@ -11,7 +20,10 @@ const REFURBISH_TRIALS := 3000
 var _fails := 0
 
 func _ready() -> void:
+	# 固定全局随机种子（autoload 的 randomize 在此之后被覆盖），保证每次运行抽样一致
+	seed(SEED)
 	print("==================== 废料引擎 · 概率自测 ====================")
+	print("随机种子 %d（固定，抽样序列可复现）" % SEED)
 	_test_loot()
 	_test_promotion()
 	_test_repair()
